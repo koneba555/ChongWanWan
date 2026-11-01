@@ -21,6 +21,7 @@ img { max-width: 100%; }
 #garland { top: 0; left: 30%; width: 40%; height: 96px; pointer-events: none; }
 
 #top { position: absolute; z-index: 3; left: max(24px, env(safe-area-inset-left, 0px)); right: max(24px, env(safe-area-inset-right, 0px)); top: 18px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
+#brand { background: #1a0f08cc; border: 1px solid #f2c14e66; border-radius: 10px; padding: 5px 14px; }
 #brand small { display: block; font-size: 13px; font-weight: 300; color: var(--gold-pale); }
 #brand b { display: block; font-weight: 500; font-size: 21px; line-height: 1.35; color: var(--cream); text-shadow: 0 2px 6px #0009; }
 #money { font-size: 16px; font-weight: 500; color: var(--gold); background: #1a0f08cc; border: 1px solid #f2c14e66; padding: 6px 16px; border-radius: 99px; font-variant-numeric: tabular-nums; margin-right: clamp(0px, 25vw, 390px); }
@@ -82,6 +83,7 @@ img { max-width: 100%; }
 @media (max-width: 759px) {
   #garland { display: none; }
   #top { top: 10px; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); align-items: center; }
+  #brand { padding: 2px 12px; border-radius: 99px; }
   #brand small { display: none; }
   #brand b { font-size: 17px; }
   #money { margin-right: 0; font-size: 14px; padding: 4px 12px; }

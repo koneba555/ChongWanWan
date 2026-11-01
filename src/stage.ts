@@ -119,7 +119,7 @@ export class DrinkStage {
 
   private readonly liqCanvas = canvasOf(256, 512);
   private readonly liqTex = texOf(this.liqCanvas);
-  private readonly liquidMat = new T.MeshPhysicalMaterial({ map: this.liqTex, emissiveMap: this.liqTex, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.38, transparent: true, opacity: 0.96, clearcoat: 0.25, envMapIntensity: 0.18, toneMapped: false });
+  private readonly liquidMat = new T.MeshPhysicalMaterial({ map: this.liqTex, emissiveMap: this.liqTex, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.38, clearcoat: 0.25, envMapIntensity: 0.18, toneMapped: false });
   private readonly liquid = new T.Mesh(new T.BufferGeometry(), this.liquidMat);
   private level = 0;
   private levelTarget = 0;
@@ -191,6 +191,7 @@ export class DrinkStage {
     scene.add(this.servingG);
     this.liquid.renderOrder = 2;
     this.liquid.visible = false;
+    this.liquid.rotation.y = Math.PI; // keeps the texture seam facing away from the camera
     this.servingG.add(this.liquid);
 
     this.stream.visible = false;
@@ -213,7 +214,8 @@ export class DrinkStage {
     const rb = rng(9);
     for (let i = 0; i < BUBBLES; i++) this.bubbleState.push({ a: rb() * 6.28, rf: Math.sqrt(rb()) * 0.82, y: rb(), v: 0.05 + rb() * 0.14 });
     this.bubbleGeo.setAttribute('position', new T.BufferAttribute(this.bubblePos, 3));
-    this.bubbles = new T.Points(this.bubbleGeo, new T.PointsMaterial({ size: 0.036, map: radial('#ffffff', '99'), transparent: true, opacity: 0.55, depthWrite: false, color: 0xffffff }));
+    this.bubbles = new T.Points(this.bubbleGeo, new T.PointsMaterial({ size: 0.036, map: radial('#ffffff', '99'), transparent: true, opacity: 0.55, depthWrite: false, depthTest: false, color: 0xffffff }));
+    // The liquid is opaque, so bubbles inside it must skip the depth test to show.
     this.bubbles.renderOrder = 2;
     this.bubbles.frustumCulled = false;
     this.servingG.add(this.bubbles);
