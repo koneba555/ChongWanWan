@@ -11,16 +11,21 @@ async function fontsReady(): Promise<void> {
   await Promise.race([fonts, timeout]).catch(() => undefined);
 }
 
+/** Phones and tablets have no mouse to hover with, so the game isn't playable on them yet. */
+const touchOnly = matchMedia('(hover: none) and (pointer: coarse)').matches;
+
 async function main(): Promise<void> {
-  await fontsReady();
   const root = document.querySelector('#stage') as HTMLElement;
+  if (touchOnly) {
+    document.documentElement.classList.add('touch-only');
+    return;
+  }
+  await fontsReady();
   let stage: DrinkStage;
   try {
     stage = new DrinkStage({
       canvas: document.querySelector('#gl') as HTMLCanvasElement,
       stage: root,
-      ticket: document.querySelector('#ticket') as HTMLElement,
-      panel: document.querySelector('#panel-wrap') as HTMLElement,
     });
   } catch {
     const message = document.createElement('div');

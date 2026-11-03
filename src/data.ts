@@ -3,7 +3,6 @@ export type AddId = 'cond' | 'evap' | 'syrup' | 'soda' | 'lemon';
 export type IceId = 'none' | 'little' | 'normal' | 'lots';
 export type GarnishId = 'none' | 'straw' | 'lime' | 'mint' | 'pea' | 'marigold';
 export type VesselId = 'cup' | 'bag';
-export type StepId = 'base' | 'milk' | 'stir' | 'vessel' | 'ice' | 'garnish';
 export type Additions = Record<AddId, number>;
 
 export interface Drink {
@@ -14,6 +13,8 @@ export interface Drink {
   /** 0 = just poured, 1 = fully stirred. */
   mix: number;
   vessel: VesselId | null;
+  /** True once the measuring glass has been poured into the serving vessel. */
+  poured: boolean;
 }
 
 export interface Order {
@@ -68,14 +69,8 @@ export const GARNISH: Record<GarnishId, string> = {
 
 export const VESSEL: Record<VesselId, string> = { cup: 'แก้วพลาสติก', bag: 'ถุงพลาสติก' };
 
-export const STEPS: { id: StepId; title: string; hint: string }[] = [
-  { id: 'base', title: 'เทน้ำฐานลงแก้วตวง', hint: 'เทน้ำฐานหนึ่งอย่าง' },
-  { id: 'milk', title: 'เติมนมและความหวาน', hint: '' },
-  { id: 'stir', title: 'คนให้เข้ากัน', hint: '' },
-  { id: 'vessel', title: 'เลือกภาชนะ', hint: 'ลูกค้าบางคนขอใส่ถุง บางคนขอใส่แก้ว' },
-  { id: 'ice', title: 'ใส่น้ำแข็ง', hint: 'น้ำแข็งเยอะ ระดับน้ำจะสูงขึ้น' },
-  { id: 'garnish', title: 'เลือกของแต่ง', hint: 'ลูกค้าบางคนขอของแต่งเฉพาะ' },
-];
+/** Each drop of ice from the bucket moves the drink one step along this list. */
+export const ICE_STEPS: IceId[] = ['none', 'little', 'normal', 'lots'];
 
 /** A full mix takes this many turns of the spoon. */
 export const STIR_TURNS = 12;
@@ -92,6 +87,7 @@ export const blankDrink = (): Drink => ({
   garnish: 'none',
   mix: 0,
   vessel: null,
+  poured: false,
 });
 
 type OrderSpec = Omit<Order, 'milk'> & { milk: Partial<Additions> };

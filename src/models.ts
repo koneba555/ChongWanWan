@@ -237,14 +237,43 @@ export function makeIcePile(count: number): T.Group {
   return g;
 }
 
-/** Crossed-out ring for "none" and "clear" cards. */
-export function makeRing(): T.Group {
-  const mat = new T.MeshStandardMaterial({ color: 0xd6c8ab, metalness: 0.7, roughness: 0.4 });
-  const ring = new T.Mesh(new T.TorusGeometry(0.5, 0.03, 10, 64), mat);
-  const bar = new T.Mesh(new T.BoxGeometry(1, 0.05, 0.03), mat);
-  bar.rotation.z = -0.78;
+/** Steel bucket heaped with ice. */
+export function makeIceBucket(): T.Group {
+  const steel = new T.MeshStandardMaterial({ color: 0xdcd8d0, metalness: 1, roughness: 0.28, side: T.DoubleSide });
   const g = new T.Group();
-  g.add(ring, bar);
+  const wall = new T.Mesh(new T.CylinderGeometry(0.62, 0.5, 0.72, 40, 1, true), steel);
+  wall.position.y = 0.36;
+  const floor = new T.Mesh(new T.CircleGeometry(0.5, 40), steel);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = 0.02;
+  const pile = makeIcePile(8);
+  pile.scale.setScalar(0.62);
+  pile.position.y = 0.58;
+  g.add(wall, floor, pile);
+  return g;
+}
+
+/** The long bar spoon, lying on the table. */
+export function makeTableSpoon(): T.Group {
+  const steel = new T.MeshStandardMaterial({ color: 0xe8e6e0, metalness: 1, roughness: 0.18, envMapIntensity: 1.5 });
+  const shaft = new T.Mesh(new T.CylinderGeometry(0.05, 0.04, 2.6, 12), steel);
+  shaft.rotation.z = Math.PI / 2;
+  const bowl = new T.Mesh(new T.SphereGeometry(0.17, 20, 14), steel);
+  bowl.scale.set(1.3, 0.4, 1);
+  bowl.position.x = 1.4;
+  const g = new T.Group();
+  g.add(shaft, bowl);
+  return g;
+}
+
+/** Several copies of a vessel stacked with a small rise between them. */
+export function makeVesselStack(shell: () => T.Object3D, count: number, step: number): T.Group {
+  const g = new T.Group();
+  for (let i = 0; i < count; i++) {
+    const s = shell();
+    s.position.y = i * step;
+    g.add(s);
+  }
   return g;
 }
 

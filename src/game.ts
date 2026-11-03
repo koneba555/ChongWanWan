@@ -1,3 +1,4 @@
+import * as T from 'three';
 import { drawGarland } from './art';
 import {
   ADD,
@@ -5,53 +6,34 @@ import {
   BASE,
   GARNISH,
   ICE,
+  ICE_STEPS,
   MAX_PER_ADDITION,
   ORDERS,
-  STEPS,
   STIR_MAX,
   STIR_TURNS,
   VESSEL,
   blankDrink,
-  noAdditions,
   recipeOf,
   score,
   sweetWord,
   type AddId,
   type BaseId,
   type GarnishId,
-  type IceId,
   type Order,
-  type StepId,
   type VesselId,
 } from './data';
-import type { DrinkStage } from './stage';
+import { CUP_HOME, SERVE_HOME, type DrinkStage } from './stage';
+import { Table, type DropTarget, type TableItem, type TableRules } from './table';
 
 const $ = <E extends Element = HTMLElement>(sel: string) => document.querySelector<E>(sel) as E;
-const RING_LENGTH = 276.46;
-const PHONE_WIDTH = 760;
+const RING_LENGTH = 138.2;
 const KEY_STIR_SPEED = 9.4; // radians per second, about 1.5 turns
 
-interface Card {
-  key: string;
-  label: string;
-  img: string;
-  selected?: boolean;
-  count?: number;
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: { id?: string; className?: string; text?: string } = {}) {
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: { id?: string; text?: string } = {}) {
   const e = document.createElement(tag);
   if (props.id) e.id = props.id;
-  if (props.className) e.className = props.className;
   if (props.text !== undefined) e.textContent = props.text;
   return e;
-}
-
-function button(className: string, text: string, onClick?: () => void, id?: string) {
-  const b = el('button', { className, text, id });
-  b.type = 'button';
-  if (onClick) b.addEventListener('click', onClick);
-  return b;
 }
 
 function avatarSvg(o: Order): string {
@@ -60,18 +42,23 @@ function avatarSvg(o: Order): string {
 
 export function startGame(stage: DrinkStage): void {
   const stageEl = $('#stage');
-  const panel = $('#panel');
-  const foot = $('#foot');
+  const canvas = $<HTMLCanvasElement>('#gl');
   const garland = $<HTMLCanvasElement>('#garland');
-  const icons = stage.buildIcons();
+  const contents = $('#contents');
+  const hint = $('#hint');
+  const stirBox = $('#stir');
+  const serveBtn = $<HTMLButtonElement>('#serve');
+  const resetBtn = $<HTMLButtonElement>('#reset');
+  const spoonBtn = $<HTMLButtonElement>('#spoon-done');
+  const resultCard = $('#result-card');
 
   let drink = blankDrink();
-  let step = 0;
   let orderIdx = 0;
   let orderNo = 1;
   let money = 0;
   let served = false;
 
+  let stirring = false;
   let stirTime = 0;
   let turnRate = 0;
   let spoonAngle = 0;
@@ -81,8 +68,142 @@ export function startGame(stage: DrinkStage): void {
   let mouseX = 0;
   let mouseY = 0;
 
-  const stepId = (): StepId => STEPS[step].id;
-  const relayout = () => requestAnimationFrame(() => stage.layout());
+  const say = (text: string) => {
+    hint.textContent = text;
+  };
+
+  function nextHint(): string {
+    if (served) return 'เสิร์ฟแล้ว กดรับออเดอร์ถัดไปได้เลย';
+    if (stirring) return drink.mix >= 1 ? 'เข้ากันดีแล้ว กดวางช้อนได้เลย' : 'หมุนเมาส์เป็นวงรอบแก้วตวง ยิ่งหมุนเร็ว ยิ่งเสร็จไว หรือกดปุ่ม S ค้างไว้';
+    if (!drink.poured) {
+      if (!drink.base) return 'เอาเมาส์ชี้ของบนชั้นเพื่อดูชื่อ แล้วลากน้ำฐานมาใส่แก้วตวง';
+      if (drink.mix < 1) return 'เติมส่วนผสมตามสูตร แล้วลากช้อนมาใส่แก้วตวงเพื่อคน';
+      if (!drink.vessel) return 'ลากแก้วพลาสติกหรือถุงมาวางบนวงทองด้านขวา';
+      return 'ลากแก้วตวงไปเทลงภาชนะ';
+    }
+    return 'ลากน้ำแข็งและของแต่งมาใส่ภาชนะ แล้วกดเสิร์ฟ';
+  }
+
+  function updateHud(): void {
+    const parts: string[] = [];
+    if (drink.base) parts.push(BASE[drink.base].n);
+    ADD_IDS.forEach((k) => {
+      if (drink.milk[k]) parts.push(ADD[k] + (drink.milk[k] > 1 ? ` ×${drink.milk[k]}` : ''));
+    });
+    const lines: string[] = [];
+    lines.push(parts.length ? `${drink.poured ? 'ในภาชนะ' : 'ในแก้วตวง'}: ${parts.join(' + ')} · ${sweetWord(drink.milk)}` : 'แก้วตวงยังว่างอยู่');
+    const extras: string[] = [];
+    if (drink.vessel) extras.push(VESSEL[drink.vessel]);
+    if (drink.ice !== 'none') extras.push(`น้ำแข็ง${ICE[drink.ice].n}`);
+    if (drink.garnish !== 'none') extras.push(GARNISH[drink.garnish]);
+    if (parts.length) extras.unshift(`คนแล้ว ${Math.round(drink.mix * 100)}%`);
+    if (extras.length) lines.push(extras.join(' · '));
+    contents.textContent = lines.join('\n');
+    if (!stirring) say(nextHint());
+    serveBtn.hidden = !drink.poured || stage.pouring || served;
+    resetBtn.hidden = served || (!parts.length && !drink.vessel && drink.ice === 'none' && drink.garnish === 'none');
+    spoonBtn.hidden = !stirring;
+    stirBox.hidden = !stirring;
+  }
+
+  function updateStirUI(): void {
+    $('#ring-fg').setAttribute('stroke-dashoffset', String(RING_LENGTH * (1 - drink.mix)));
+    $('#stir-pct').textContent = `${Math.round(drink.mix * 100)}%`;
+    $('#stir-speed').textContent = Math.abs(turnRate).toFixed(1);
+    $('#stir-time').textContent = stirTime.toFixed(1);
+    say(nextHint());
+  }
+
+  function stopStirring(): void {
+    if (!stirring) return;
+    stirring = false;
+    turnRate = 0;
+    stage.setSpoon(false);
+    table.enabled = true;
+    const spoon = table.find('spoon', 'spoon');
+    if (spoon) table.sendHome(spoon);
+    updateHud();
+  }
+
+  const aboveCup = (y: number) => new T.Vector3(CUP_HOME.x - 0.75, y, CUP_HOME.z);
+  const aboveServe = (y: number) => new T.Vector3(SERVE_HOME.x, y, SERVE_HOME.z);
+
+  const rules: TableRules = {
+    canPick(item) {
+      if (served || stage.pouring) return false;
+      if (item.kind === 'glass') return !drink.poured;
+      return true;
+    },
+    targets(item) {
+      switch (item.kind) {
+        case 'base':
+        case 'add':
+        case 'spoon':
+          return drink.poured ? [] : ['cup'];
+        case 'glass':
+          return drink.vessel ? ['serve'] : [];
+        case 'vessel':
+          return drink.poured ? [] : ['serve'];
+        case 'ice':
+        case 'garnish':
+          return drink.vessel ? ['serve'] : [];
+      }
+    },
+    drop(item: TableItem, target: DropTarget) {
+      if (!rules.targets(item).includes(target)) return null;
+      let act: ReturnType<TableRules['drop']> = null;
+      if (item.kind === 'base') {
+        drink.base = item.key as BaseId;
+        drink.mix *= 0.4;
+        stage.pour(BASE[drink.base].stream);
+        act = { pos: aboveCup(3), tilt: -1.15, seconds: 0.9 };
+      } else if (item.kind === 'add') {
+        const k = item.key as AddId;
+        if (drink.milk[k] >= MAX_PER_ADDITION) {
+          say(`ใส่${ADD[k]}ครบ ${MAX_PER_ADDITION} ส่วนแล้ว`);
+          return null;
+        }
+        drink.milk[k]++;
+        drink.mix *= 0.4;
+        stage.pour('#f8e7cc');
+        act = { pos: aboveCup(3), tilt: -1.15, seconds: 0.9 };
+      } else if (item.kind === 'spoon') {
+        stirring = true;
+        table.enabled = false;
+        lastPointerAngle = null;
+        stage.setSpoon(true);
+        act = { pos: new T.Vector3(), tilt: 0, seconds: 0, hide: true };
+      } else if (item.kind === 'vessel') {
+        drink.vessel = item.key as VesselId;
+        stage.showVessel(drink.vessel);
+      } else if (item.kind === 'glass') {
+        if (!drink.base) {
+          say('แก้วตวงยังไม่มีน้ำ เทน้ำฐานก่อน');
+          return null;
+        }
+        drink.poured = true;
+        stage.startPour(drink);
+      } else if (item.kind === 'ice') {
+        const at = ICE_STEPS.indexOf(drink.ice);
+        drink.ice = ICE_STEPS[Math.min(ICE_STEPS.length - 1, at + 1)];
+        act = { pos: aboveServe(3.1), tilt: -0.5, seconds: 0.5 };
+      } else if (item.kind === 'garnish') {
+        drink.garnish = item.key as GarnishId;
+        act = { pos: aboveServe(3.1), tilt: 0, seconds: 0.4 };
+      }
+      if (item.kind !== 'vessel' && item.kind !== 'glass') stage.applyDrink(drink, false);
+      else if (item.kind === 'vessel') stage.applyDrink(drink, true);
+      updateHud();
+      return act;
+    },
+    tagExtra(item) {
+      if (item.kind === 'add' && drink.milk[item.key as AddId]) return `×${drink.milk[item.key as AddId]}`;
+      if (item.kind === 'ice' && drink.ice !== 'none') return `(${ICE[drink.ice].n})`;
+      return '';
+    },
+  };
+
+  const table = new Table(stage, stageEl, canvas, $('#tag'), rules);
 
   function renderOrder(): void {
     const o = ORDERS[orderIdx];
@@ -94,195 +215,54 @@ export function startGame(stage: DrinkStage): void {
     $('#order-no').textContent = String(orderNo);
   }
 
-  function cardsFor(id: StepId): Card[] {
-    switch (id) {
-      case 'base':
-        return (Object.keys(BASE) as BaseId[]).map((k) => ({ key: k, label: BASE[k].n, img: icons[k], selected: drink.base === k }));
-      case 'milk':
-        return [
-          ...ADD_IDS.map((k) => ({ key: k as string, label: ADD[k], img: icons[k], count: drink.milk[k] })),
-          { key: 'dump', label: 'ล้างที่เติม', img: icons.dump },
-        ];
-      case 'vessel':
-        return (Object.keys(VESSEL) as VesselId[]).map((k) => ({ key: k, label: VESSEL[k], img: icons[`v_${k}`], selected: drink.vessel === k }));
-      case 'ice':
-        return (Object.keys(ICE) as IceId[]).map((k) => ({ key: k, label: ICE[k].n, img: icons[`i_${k}`], selected: drink.ice === k }));
-      case 'garnish':
-        return (Object.keys(GARNISH) as GarnishId[]).map((k) => ({ key: k, label: GARNISH[k], img: icons[`g_${k}`], selected: drink.garnish === k }));
-      case 'stir':
-        return [];
-    }
-  }
-
-  function backButton(): HTMLButtonElement {
-    return button('ghost', 'ย้อนกลับ', () => {
-      step--;
-      renderPanel();
-    });
-  }
-
-  function renderPanel(): void {
-    panel.textContent = '';
-    foot.textContent = '';
-    stage.setSpoon(!served && stepId() === 'stir');
-    if (served) {
-      renderResult();
-      relayout();
-      return;
-    }
-    const st = STEPS[step];
-    const dots = el('div', { id: 'dots' });
-    STEPS.forEach((_, i) => dots.append(el('i', { className: i <= step ? 'on' : '' })));
-    const title = el('div', { id: 'step-title', text: st.title });
-
-    if (st.id === 'stir') {
-      const box = el('div', { id: 'stir' });
-      box.innerHTML = `<svg id="ring" viewBox="0 0 110 110" role="img" aria-label="ความเข้ากันของเครื่องดื่ม"><circle cx="55" cy="55" r="44" fill="none" stroke="#3a2212" stroke-width="10"/><circle id="ring-fg" cx="55" cy="55" r="44" fill="none" stroke="#f2c14e" stroke-width="10" stroke-linecap="round" stroke-dasharray="${RING_LENGTH}" transform="rotate(-90 55 55)"/><text id="stir-pct" x="55" y="63" text-anchor="middle">0%</text></svg><div id="stir-stats"><div>ความเร็ว<b id="stir-speed">0.0</b>รอบ/วินาที</div><div>เวลาที่ใช้<b id="stir-time">0.0</b>วินาที</div></div><div id="stir-msg"></div>`;
-      panel.append(dots, title, box);
-      foot.append(backButton(), button('pill', 'ขั้นต่อไป', () => {
-        step++;
-        renderPanel();
-      }, 'next'));
-      updateStirUI();
-      relayout();
-      return;
-    }
-
-    const grid = el('div', { id: 'grid' });
-    const cards = cardsFor(st.id);
-    const phoneCols = cards.length === 6 ? 3 : cards.length === 2 ? 2 : 4;
-    grid.style.setProperty('--cols', String(innerWidth < PHONE_WIDTH ? phoneCols : 2));
-    cards.forEach((c) => {
-      const b = button(`card${c.selected ? ' sel' : ''}`, '', () => choose(st.id, c.key), `card-${st.id}-${c.key}`);
-      const img = el('img');
-      img.src = c.img;
-      img.alt = '';
-      b.append(img, el('span', { text: c.label }));
-      if (c.count) b.append(el('em', { text: `×${c.count}` }));
-      grid.append(b);
-    });
-    const hint = el('div', { id: 'hint', text: st.id === 'milk' ? `ความหวาน: ${sweetWord(drink.milk)} · กดซ้ำเพื่อเติมอีก` : st.hint });
-    panel.append(dots, title, grid, hint);
-
-    if (stage.phase === 'pouring') {
-      foot.append(button('pill', 'กำลังเท'));
-      relayout();
-      return;
-    }
-    if (step > 0 && st.id !== 'ice') foot.append(backButton());
-    const nextLabel = st.id === 'vessel' ? 'เทลงภาชนะ' : step < STEPS.length - 1 ? 'ขั้นต่อไป' : 'ชงเสร็จ เสิร์ฟเลย';
-    foot.append(button('pill', nextLabel, () => {
-      if (st.id === 'base' && !drink.base) {
-        hint.textContent = 'เทน้ำฐานก่อน แล้วค่อยไปขั้นต่อไป';
-        return;
-      }
-      if (st.id === 'vessel') {
-        if (!drink.vessel) {
-          hint.textContent = 'เลือกแก้วหรือถุงก่อน แล้วค่อยเท';
-          return;
-        }
-        startPour();
-        return;
-      }
-      if (step < STEPS.length - 1) {
-        step++;
-        renderPanel();
-      } else {
-        serve();
-      }
-    }, 'next'));
-    relayout();
-  }
-
-  function choose(id: StepId, key: string): void {
-    if (stage.phase === 'pouring') return;
-    if (id === 'vessel') drink.vessel = key as VesselId;
-    if (id === 'base') {
-      drink.base = key as BaseId;
-      drink.mix *= 0.4;
-      stage.pour(BASE[key as BaseId].stream);
-    }
-    if (id === 'milk') {
-      if (key === 'dump') {
-        drink.milk = noAdditions();
-      } else {
-        const k = key as AddId;
-        if (drink.milk[k] >= MAX_PER_ADDITION) return;
-        drink.milk[k]++;
-        drink.mix *= 0.4;
-        stage.pour('#f8e7cc');
-      }
-    }
-    if (id === 'ice') drink.ice = key as IceId;
-    if (id === 'garnish') drink.garnish = key as GarnishId;
-    stage.applyDrink(drink, false);
-    renderPanel();
-    document.getElementById(`card-${id}-${key}`)?.focus({ preventScroll: true });
-  }
-
-  function updateStirUI(): void {
-    const ring = document.getElementById('ring-fg');
-    if (!ring) return;
-    ring.setAttribute('stroke-dashoffset', String(RING_LENGTH * (1 - drink.mix)));
-    $('#stir-pct').textContent = `${Math.round(drink.mix * 100)}%`;
-    $('#stir-speed').textContent = Math.abs(turnRate).toFixed(1);
-    $('#stir-time').textContent = stirTime.toFixed(1);
-    $('#stir-msg').textContent = drink.mix >= 1
-      ? 'เข้ากันดีแล้ว ไปเลือกภาชนะได้เลย'
-      : innerWidth < PHONE_WIDTH
-        ? 'ลากนิ้วเป็นวงรอบแก้ว ยิ่งหมุนเร็ว ยิ่งเสร็จไว'
-        : 'หมุนเมาส์เป็นวงรอบแก้ว ยิ่งหมุนเร็ว ยิ่งเสร็จไว หรือกดปุ่ม S ค้างไว้';
-  }
-
-  function startPour(): void {
-    if (!drink.vessel) return;
-    turnRate = 0;
-    stage.startPour({ ...drink, vessel: drink.vessel });
-    renderPanel();
+  function clearDrink(): void {
+    stopStirring();
+    drink = blankDrink();
+    stirTime = 0;
+    stage.resetPositions();
+    stage.setGarnish('none', true);
+    stage.showVessel(null);
+    stage.applyDrink(drink, true);
+    updateHud();
   }
 
   function serve(): void {
-    if (!drink.vessel) return;
+    if (!drink.vessel || !drink.poured) return;
     served = true;
+    stopStirring();
     stage.setVessel(drink.vessel, true);
-    money += score(drink, ORDERS[orderIdx]).pay;
-    $('#money-n').textContent = String(money);
-    renderPanel();
-  }
-
-  function renderResult(): void {
     const r = score(drink, ORDERS[orderIdx]);
-    const box = el('div', { id: 'result' });
+    money += r.pay;
+    $('#money-n').textContent = String(money);
+    resultCard.textContent = '';
     const list = el('ul', { id: 'breakdown' });
     r.rows.forEach((row) => {
       const li = el('li');
       li.append(el('span', { text: row.label }), el('b', { text: `${row.got}/${row.max}` }));
       list.append(li);
     });
-    box.append(el('div', { id: 'verdict', text: r.verdict }), el('div', { id: 'earn', text: r.pay ? `+${r.pay} บาท` : 'ไม่ได้เงิน' }), list);
-    panel.append(box);
-    foot.append(button('pill', 'รับออเดอร์ถัดไป', nextOrder, 'next'));
+    const next = el('button', { id: 'next', text: 'รับออเดอร์ถัดไป' });
+    next.type = 'button';
+    next.className = 'pill';
+    next.addEventListener('click', nextOrder);
+    resultCard.append(el('div', { id: 'verdict', text: r.verdict }), el('div', { id: 'earn', text: r.pay ? `+${r.pay} บาท` : 'ไม่ได้เงิน' }), list, next);
+    resultCard.hidden = false;
+    updateHud();
   }
 
   function nextOrder(): void {
     // Any order except the one just served.
     orderIdx = (orderIdx + 1 + Math.floor(Math.random() * (ORDERS.length - 1))) % ORDERS.length;
     orderNo++;
-    drink = blankDrink();
-    step = 0;
     served = false;
-    stirTime = 0;
-    turnRate = 0;
-    stage.phase = 'cup';
-    stage.setGarnish('none', true);
-    stage.syncVessels();
-    stage.applyDrink(drink, true);
+    resultCard.hidden = true;
+    clearDrink();
     renderOrder();
-    renderPanel();
+    updateHud();
   }
 
   function stirFrame(dt: number): void {
-    if (stage.phase !== 'cup' || served || stepId() !== 'stir') {
+    if (!stirring) {
       pendingAngle = 0;
       return;
     }
@@ -300,6 +280,7 @@ export function startGame(stage: DrinkStage): void {
       stirTime += dt;
       drink.mix = Math.min(1, drink.mix + (Math.min(speed, STIR_MAX) / STIR_TURNS) * dt);
       if (Math.abs(drink.mix - stage.paintedMix) > 0.025 || drink.mix === 1) stage.paintLiquid(drink);
+      updateHud();
     }
     updateStirUI();
   }
@@ -308,11 +289,11 @@ export function startGame(stage: DrinkStage): void {
     const r = stageEl.getBoundingClientRect();
     mouseX = (e.clientX - r.left) / r.width - 0.5;
     mouseY = (e.clientY - r.top) / r.height - 0.5;
-    if (stage.phase !== 'cup' || served || stepId() !== 'stir') {
+    if (!stirring) {
       lastPointerAngle = null;
       return;
     }
-    const c = stage.cupScreenPoint();
+    const c = stage.screenPoint(CUP_HOME.x, 1, CUP_HOME.z);
     const dx = e.clientX - r.left - c.x * r.width;
     const dy = e.clientY - r.top - c.y * r.height;
     if (Math.hypot(dx, dy) < 14) {
@@ -340,14 +321,16 @@ export function startGame(stage: DrinkStage): void {
   addEventListener('resize', () => {
     stage.layout();
     drawGarland(garland);
-    renderPanel();
   });
+  serveBtn.addEventListener('click', serve);
+  resetBtn.addEventListener('click', clearDrink);
+  spoonBtn.addEventListener('click', stopStirring);
 
   drawGarland(garland);
   renderOrder();
-  renderPanel();
   stage.layout();
   stage.applyDrink(drink, true);
+  updateHud();
 
   let last = performance.now();
   let elapsed = 0;
@@ -356,10 +339,8 @@ export function startGame(stage: DrinkStage): void {
     last = now;
     elapsed += dt;
     stirFrame(dt);
-    if (stage.update(dt, elapsed, mouseX, mouseY)) {
-      step = STEPS.findIndex((s) => s.id === 'ice');
-      renderPanel();
-    }
+    table.update(dt, elapsed);
+    if (stage.update(dt, elapsed, mouseX, mouseY)) updateHud();
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { canvasOf, ctx2d, mixHex, paintBackground, paintEnv, paintTerrazzo, radial, rng, texOf } from './art';
 import { BASE, ICE, type Drink, type GarnishId, type Order, type VesselId } from './data';
-import { iceCube, makeCan, makeGarnish, makeIcePile, makeLime, makeBottle, makeMarigold, makeMint, makePeaFlower, makeRing, makeStraw, makeTin, spline } from './models';
+import { iceCube, makeGarnish, spline } from './models';
 
 const reduceMotion = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const vec2 = (x: number, y: number) => new T.Vector2(x, y);
@@ -9,8 +9,13 @@ const clamp = T.MathUtils.clamp;
 const lerp = T.MathUtils.lerp;
 const ease = (u: number) => u * u * (3 - 2 * u);
 
-/** cup: brewing in the measuring glass. pouring: moving to the serving vessel. serving: finishing it there. */
-export type Phase = 'cup' | 'pouring' | 'serving';
+/** Where the measuring glass and the serving vessel stand on the mat. */
+export const CUP_HOME = new T.Vector3(0, 0.07, 0.1);
+export const SERVE_HOME = new T.Vector3(1.55, 0.07, 0.1);
+/** The serving vessels are modelled tall; this keeps them in proportion with the things on the table. */
+export const SERVE_SCALE = 0.72;
+/** Height of the measuring glass while pouring. */
+const POUR_Y = 3.15;
 
 const glassMat = new T.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, metalness: 0, transparent: true, opacity: 0.08, side: T.DoubleSide, depthWrite: false, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.5 });
 const fresnelMat = new T.ShaderMaterial({
@@ -55,7 +60,7 @@ function addGlassSkin(g: T.Group, geo: T.BufferGeometry): void {
 }
 
 /** Serving vessels: a plastic cup that gets a dome lid, or a bag tied with a rubber band, both once served. */
-function buildShell(k: VesselId, finished: boolean): T.Group {
+export function buildShell(k: VesselId, finished: boolean): T.Group {
   const g = new T.Group();
   const pts = vesselPts(k, finished);
   const lathe = new T.LatheGeometry(pts, 96);
@@ -94,17 +99,19 @@ const BUBBLES = 70;
 export interface StageElements {
   canvas: HTMLCanvasElement;
   stage: HTMLElement;
-  ticket: HTMLElement;
-  panel: HTMLElement;
 }
 
 export class DrinkStage {
-  phase: Phase = 'cup';
+  /** True while the measuring glass is being poured into the serving vessel. */
+  pouring = false;
+  /** Holds everything set out on the table; hidden for the ticket photo. */
+  readonly tableG = new T.Group();
+  readonly camera = new T.PerspectiveCamera(30, 1, 0.1, 100);
+  readonly cupG = new T.Group();
 
   private readonly renderer: T.WebGLRenderer;
   private readonly env: T.Texture;
   private readonly scene = new T.Scene();
-  private readonly camera = new T.PerspectiveCamera(30, 1, 0.1, 100);
   private readonly bgTex = paintBackground();
   private readonly sceneryOnly: T.Object3D[];
   private readonly glow: T.Mesh<T.PlaneGeometry, T.MeshBasicMaterial>;
@@ -125,13 +132,15 @@ export class DrinkStage {
   private levelTarget = 0;
   private levelBuilt = -1;
 
-  private readonly cupG = new T.Group();
+  private readonly cupRing = this.makeDropRing(CUP_HOME.x, 1.05);
+  private readonly serveRing = this.makeDropRing(SERVE_HOME.x, 1.25);
+  private hasVessel = false;
+  private serveScale = SERVE_SCALE;
   private readonly cupLiquid = new T.Mesh(new T.BufferGeometry(), this.liquidMat);
   private readonly spoon = new T.Group();
   private cupLevel = 0;
   private cupTarget = 0;
   private cupBuilt = -1;
-  private spoonOn = false;
 
   private readonly stream = new T.Mesh(new T.CylinderGeometry(0.045, 0.03, 1, 16), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, emissive: 0xffffff, emissiveIntensity: 0.2 }));
   private streamT = 0;
@@ -148,7 +157,6 @@ export class DrinkStage {
 
   private pourT = 0;
   private pourFrom = 0;
-  private camCup = 1;
   private parX = 0;
   private parY = 0;
   private camDist = 9;
@@ -174,20 +182,29 @@ export class DrinkStage {
 
     const counter = new T.Mesh(new T.PlaneGeometry(44, 16), new T.MeshStandardMaterial({ map: texOf(paintTerrazzo(), [8, 3]), roughness: 0.27, metalness: 0.05, envMapIntensity: 0.9 }));
     counter.rotation.x = -Math.PI / 2;
-    counter.position.set(0, 0, 5.4);
+    counter.position.set(0, 0, 4.6);
     const edge = new T.Mesh(new T.BoxGeometry(44, 0.05, 0.05), new T.MeshStandardMaterial({ color: 0xf8efdc, roughness: 0.2, metalness: 0.2 }));
-    edge.position.set(0, -0.012, -2.6);
+    edge.position.set(0, -0.012, -3.4);
     const mat = this.buildBarMat();
 
-    const shadow = new T.Mesh(new T.PlaneGeometry(3.6, 2.3), new T.MeshBasicMaterial({ map: radial('#2a1a10', '66'), transparent: true, opacity: 0.75, depthWrite: false, toneMapped: false }));
+    const shadowMat = new T.MeshBasicMaterial({ map: radial('#2a1a10', '66'), transparent: true, opacity: 0.75, depthWrite: false, toneMapped: false });
+    const shadow = new T.Mesh(new T.PlaneGeometry(2.6, 1.7), shadowMat);
     shadow.rotation.x = -Math.PI / 2;
-    shadow.position.set(0.15, 0.09, -0.05);
-    this.glow = new T.Mesh(new T.PlaneGeometry(2.6, 1.7), new T.MeshBasicMaterial({ map: radial('#ffffff', '55'), transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending, color: 0xffffff }));
+    shadow.position.set(CUP_HOME.x + 0.1, 0.09, CUP_HOME.z - 0.05);
+    const serveShadow = new T.Mesh(new T.PlaneGeometry(3.4, 2.2), shadowMat);
+    serveShadow.rotation.x = -Math.PI / 2;
+    serveShadow.position.set(SERVE_HOME.x + 0.1, 0.09, SERVE_HOME.z - 0.05);
+    const shelf = new T.Mesh(new T.BoxGeometry(7.4, 0.95, 0.95), new T.MeshStandardMaterial({ color: 0x8e5a30, roughness: 0.55, envMapIntensity: 0.8 }));
+    shelf.position.set(0, 0.475, -2.7);
+    this.tableG.add(shelf);
+    scene.add(this.tableG, this.cupRing, this.serveRing, serveShadow);
+    this.glow =new T.Mesh(new T.PlaneGeometry(2.6, 1.7), new T.MeshBasicMaterial({ map: radial('#ffffff', '55'), transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending, color: 0xffffff }));
     this.glow.rotation.x = -Math.PI / 2;
-    this.glow.position.set(0.35, 0.095, 0.52);
+    this.glow.position.set(SERVE_HOME.x + 0.35, 0.095, SERVE_HOME.z + 0.52);
     scene.add(counter, edge, mat, shadow, this.glow);
 
-    this.servingG.position.y = 0.07;
+    this.servingG.position.copy(SERVE_HOME);
+    this.servingG.visible = false;
     scene.add(this.servingG);
     this.liquid.renderOrder = 2;
     this.liquid.visible = false;
@@ -220,24 +237,37 @@ export class DrinkStage {
     this.bubbles.frustumCulled = false;
     this.servingG.add(this.bubbles);
 
-    this.sceneryOnly = [counter, edge, shadow, this.glow, this.stream, mat];
-    this.syncVessels();
+    this.sceneryOnly = [counter, edge, shadow, serveShadow, this.glow, this.stream, mat, this.tableG, this.cupG, this.cupRing, this.serveRing];
+  }
+
+  /** Gold ring on the mat that lights up where a held item can be put. */
+  private makeDropRing(x: number, radius: number): T.Mesh<T.RingGeometry, T.MeshBasicMaterial> {
+    const ring = new T.Mesh(new T.RingGeometry(radius - 0.05, radius, 64), new T.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(x, 0.1, 0.1);
+    ring.visible = false;
+    return ring;
+  }
+
+  setDropHints(cup: boolean, serve: boolean): void {
+    this.cupRing.visible = cup;
+    this.serveRing.visible = serve;
   }
 
   /** Black rubber with rows of nubs, plus a scatter of spilled sugar. */
   private buildBarMat(): T.Group {
     const g = new T.Group();
     const rubber = new T.MeshStandardMaterial({ color: 0x101012, roughness: 0.5, metalness: 0.05, envMapIntensity: 0.7 });
-    const base = new T.Mesh(new T.BoxGeometry(6.4, 0.04, 4), rubber);
-    base.position.set(0, 0.02, 0.25);
+    const base = new T.Mesh(new T.BoxGeometry(4.6, 0.04, 3.4), rubber);
+    base.position.set(0, 0.02, 0.1);
     g.add(base);
-    const cols = 46;
-    const rows = 28;
+    const cols = 33;
+    const rows = 24;
     const nubs = new T.InstancedMesh(new T.CylinderGeometry(0.04, 0.052, 0.035, 10), rubber, cols * rows);
     const d = new T.Object3D();
     for (let i = 0; i < cols; i++) {
       for (let j = 0; j < rows; j++) {
-        d.position.set(-3.08 + i * 0.137, 0.057, -1.6 + j * 0.137);
+        d.position.set(-2.19 + i * 0.137, 0.057, -1.47 + j * 0.137);
         d.updateMatrix();
         nubs.setMatrixAt(i * rows + j, d.matrix);
       }
@@ -247,8 +277,8 @@ export class DrinkStage {
     const grains = new T.InstancedMesh(new T.IcosahedronGeometry(0.016, 0), new T.MeshStandardMaterial({ color: 0xfff8ea, roughness: 0.4 }), 90);
     for (let i = 0; i < 90; i++) {
       const a = r() * 6.28;
-      const q = 1 + r() * 1.9;
-      d.position.set(Math.cos(a) * q + 0.3, 0.082, Math.sin(a) * q * 0.7 + 0.3);
+      const q = 0.5 + r() * 1.5;
+      d.position.set(Math.cos(a) * q, 0.082, Math.sin(a) * q * 0.7 + 0.1);
       d.rotation.set(r() * 3, r() * 3, 0);
       d.updateMatrix();
       grains.setMatrixAt(i, d.matrix);
@@ -260,7 +290,7 @@ export class DrinkStage {
   /** Straight-sided with red graduations; sits on the mat while brewing. */
   private buildMeasuringGlass(): void {
     const { cupG, spoon } = this;
-    cupG.position.y = 0.07;
+    cupG.position.copy(CUP_HOME);
     this.scene.add(cupG);
 
     const outer = new T.LatheGeometry([vec2(0.001, 0), vec2(0.62, 0), vec2(0.67, 0.05), vec2(0.78, 1.72)], 96);
@@ -447,7 +477,7 @@ export class DrinkStage {
     if (this.shellNow) this.servingG.remove(this.shellNow);
     this.shellNow = this.shells[id];
     this.servingG.add(this.shellNow);
-    this.servingG.scale.z = k === 'bag' ? 0.82 : 1;
+    this.servingG.scale.set(this.serveScale, this.serveScale, this.serveScale * (k === 'bag' ? 0.82 : 1));
     if (this.level > 0.01) this.buildLiquid(this.level);
   }
 
@@ -487,16 +517,10 @@ export class DrinkStage {
     const M = s.milk;
     const has = s.base || M.cond + M.evap + M.syrup + M.soda + M.lemon > 0;
     const amount = has ? (s.base ? 0.6 : 0) + M.cond * 0.065 + M.evap * 0.065 + M.syrup * 0.04 + M.soda * 0.08 + M.lemon * 0.03 : 0;
-    if (this.phase === 'cup') {
-      this.cupTarget = Math.min(0.88, amount);
-      this.levelTarget = 0;
-      this.cubes.forEach((c) => (c.visible = false));
-      this.setGarnish('none', true);
-    } else {
-      this.levelTarget = has ? Math.min(0.95, amount + ICE[s.ice].lv) : 0;
-      this.cubes.forEach((c, i) => (c.visible = i < ICE[s.ice].k));
-      this.setGarnish(s.garnish, instant);
-    }
+    this.cupTarget = s.poured ? 0 : Math.min(0.88, amount);
+    this.levelTarget = s.poured && has ? Math.min(0.95, amount + ICE[s.ice].lv) : 0;
+    this.cubes.forEach((c, i) => (c.visible = i < ICE[s.ice].k));
+    this.setGarnish(s.garnish, instant);
     if (instant) {
       this.level = this.levelTarget;
       if (this.levelTarget > 0) this.buildLiquid(this.level);
@@ -538,7 +562,7 @@ export class DrinkStage {
     }
   }
 
-  /** Shows a stream falling into the measuring glass. */
+  /** Shows a stream falling into the measuring glass from the item being tipped above it. */
   pour(col: string): void {
     this.streamT = 1;
     this.stream.material.color.set(col);
@@ -551,20 +575,25 @@ export class DrinkStage {
     this.stream.position.set(x, (yTop + yBot) / 2, 0);
   }
 
-  syncVessels(): void {
-    this.servingG.visible = this.phase !== 'cup';
-    this.cupG.visible = this.phase !== 'serving';
-    if (this.phase === 'cup') {
-      this.cupG.position.set(0, 0.07, 0);
-      this.cupG.rotation.set(0, 0, 0);
-      this.servingG.position.x = 0;
-    }
-    this.spoon.visible = this.phase === 'cup' && this.spoonOn;
+  /** Shows or removes the serving vessel standing on the mat. */
+  showVessel(k: VesselId | null): void {
+    this.hasVessel = k !== null;
+    this.servingG.visible = this.hasVessel;
+    if (k) this.setVessel(k, false);
   }
 
+  /** Puts the spoon in the measuring glass, or takes it back out. */
   setSpoon(on: boolean): void {
-    this.spoonOn = on;
-    this.syncVessels();
+    this.spoon.visible = on;
+  }
+
+  /** Puts both glasses back on the mat, for a new order. */
+  resetPositions(): void {
+    this.pouring = false;
+    this.cupG.position.copy(CUP_HOME);
+    this.cupG.rotation.set(0, 0, 0);
+    this.cupLiquid.rotation.y = 0;
+    this.level = 0;
   }
 
   /** Spins the spoon and carries the liquid's swirl along with it. */
@@ -577,23 +606,21 @@ export class DrinkStage {
     return this.cupLevel > 0.01;
   }
 
-  /** Where the measuring glass sits on screen, as fractions of the stage. */
-  cupScreenPoint(): { x: number; y: number } {
-    const p = new T.Vector3(0, 1, 0).project(this.camera);
+  /** Where a world point sits on screen, as fractions of the stage. */
+  screenPoint(x: number, y: number, z: number): { x: number; y: number } {
+    const p = new T.Vector3(x, y, z).project(this.camera);
     return { x: (p.x + 1) / 2, y: (1 - p.y) / 2 };
   }
 
-  startPour(s: Drink & { vessel: VesselId }): void {
-    if (this.phase !== 'cup') return;
-    this.phase = 'pouring';
+  /** s must already be marked as poured. */
+  startPour(s: Drink): void {
+    if (this.pouring) return;
+    this.pouring = true;
     this.pourT = 0;
     this.pourFrom = this.cupLevel;
     this.level = 0;
     this.liquid.visible = false;
-    this.setVessel(s.vessel, false);
     this.applyDrink(s, false);
-    this.servingG.visible = true;
-    this.servingG.position.x = 3.4;
     this.spoon.visible = false;
   }
 
@@ -603,28 +630,27 @@ export class DrinkStage {
     const a = ease(Math.min(1, this.pourT / 0.3));
     const u = clamp((this.pourT - 0.3) / 0.55, 0, 1);
     const v = ease(clamp((this.pourT - 0.85) / 0.15, 0, 1));
-    this.cupG.position.set(-1.82 * a - 4.5 * v, 0.07 + 3.78 * a, 0);
-    this.cupG.rotation.z = -1.15 * a;
-    this.servingG.position.x = 3.4 * (1 - a);
+    const up = a * (1 - v);
+    this.cupG.position.set(lerp(CUP_HOME.x, SERVE_HOME.x - 1.82, up), lerp(CUP_HOME.y, POUR_Y, up), lerp(CUP_HOME.z, SERVE_HOME.z, up));
+    this.cupG.rotation.z = -1.15 * up;
     this.cupLevel = this.pourFrom * (1 - u);
     if (this.cupLevel > 0.01) this.buildCupLiquid(this.cupLevel);
     this.cupLiquid.visible = this.cupLevel > 0.01;
     this.level = this.levelTarget * u;
     if (this.level > 0.01) this.buildLiquid(this.level);
-    if (u > 0 && u < 1) this.setStream(0.05, 3.85, this.levelY(this.level) + 0.05);
+    if (u > 0 && u < 1) this.setStream(SERVE_HOME.x + 0.05, POUR_Y, this.levelY(this.level) * SERVE_SCALE + 0.12);
     else this.stream.visible = false;
     if (this.pourT < 1) return false;
-    this.phase = 'serving';
+    this.pouring = false;
     this.level = this.levelTarget;
     this.buildLiquid(this.level);
-    this.syncVessels();
     return true;
   }
 
   /** Advances the scene one frame. Returns true on the frame a pour finishes. */
   update(dt: number, elapsed: number, mouseX: number, mouseY: number): boolean {
     let poured = false;
-    if (this.phase === 'pouring') {
+    if (this.pouring) {
       poured = this.pourFrame(dt);
     } else {
       if (Math.abs(this.levelTarget - this.level) > 0.0008) {
@@ -635,16 +661,16 @@ export class DrinkStage {
         this.cupLevel += (this.cupTarget - this.cupLevel) * Math.min(1, dt * 3.2);
         if (Math.abs(this.cupLevel - this.cupBuilt) > 0.0015) this.buildCupLiquid(this.cupLevel);
       }
-      if (this.streamT > 0 && this.phase === 'cup') {
+      if (this.streamT > 0) {
         this.streamT -= dt / 0.9;
-        this.setStream(0, 5, cupY(this.cupLevel) + 0.07);
+        this.setStream(CUP_HOME.x, 3, cupY(this.cupLevel) + 0.07);
       } else {
         this.stream.visible = false;
       }
       this.cupLiquid.visible = this.cupLevel > 0.01;
     }
     this.liquid.visible = this.level > 0.01;
-    this.glow.material.opacity = Math.min(0.55, Math.max(this.level, this.cupLevel * 0.6) * 0.8);
+    this.glow.material.opacity = Math.min(0.55, this.level * 0.8);
     this.placeFloaters(elapsed, dt);
 
     if (this.garnishObj) {
@@ -657,59 +683,36 @@ export class DrinkStage {
       }
     }
 
-    const camTarget = this.phase === 'cup' ? 1 : 0;
-    this.camCup = reduceMotion ? camTarget : this.camCup + (camTarget - this.camCup) * Math.min(1, dt * 2.4);
     if (!reduceMotion) {
-      this.servingG.rotation.y += (mouseX * 0.5 + Math.sin(elapsed * 0.35) * 0.07 - this.servingG.rotation.y) * 0.05;
-      this.parX += (mouseX * 0.45 - this.parX) * 0.04;
-      this.parY += (-mouseY * 0.22 - this.parY) * 0.04;
+      this.servingG.rotation.y += (mouseX * 0.3 + Math.sin(elapsed * 0.35) * 0.05 - this.servingG.rotation.y) * 0.05;
+      this.parX += (mouseX * 0.25 - this.parX) * 0.04;
+      this.parY += (-mouseY * 0.12 - this.parY) * 0.04;
     }
     this.placeCamera();
     this.renderer.render(this.scene, this.camera);
     return poured;
   }
 
-  /** camCup 1 = closer and higher, looking down at the measuring glass; 0 = framed on the serving vessel. */
+  /** Looks down across the table from slightly above. */
   private placeCamera(): void {
-    const d = this.camDist;
-    const m = this.camCup;
-    this.camera.position.set(this.parX, lerp(2.35 + d * 0.012, 3.5, m) + this.parY, d * (1 - 0.26 * m));
-    this.camera.lookAt(0, lerp(1.82, 0.82, m), 0);
+    this.camera.position.set(this.parX, 6.4 + this.parY, this.camDist);
+    this.camera.lookAt(0, 0.95, 0.45);
   }
 
-  /** Fits the camera to the free space between the ticket and the ingredient panel. */
+  /** Keeps the whole table in frame at any window shape. */
   layout(): void {
-    const { stage, ticket, panel } = this.els;
+    const { stage } = this.els;
     const w = stage.clientWidth;
     const h = stage.clientHeight;
     if (!w || !h) return;
     this.renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
     this.renderer.setSize(w, h, false);
     this.renderer.setClearColor(0, 1);
-    const sr = stage.getBoundingClientRect();
-    const tk = ticket.getBoundingClientRect();
-    const pn = panel.getBoundingClientRect();
-    let cx = w / 2;
-    let cy = h / 2;
-    let freeW = w;
-    let freeH = h;
-    if (w >= 760) {
-      const L = tk.right - sr.left;
-      const R = pn.left - sr.left;
-      cx = (L + R) / 2;
-      freeW = Math.max(240, R - L);
-    } else {
-      const top = tk.bottom - sr.top;
-      const bottom = pn.top - sr.top;
-      cy = (top + bottom) / 2;
-      freeH = Math.max(150, bottom - top);
-    }
     const aspect = w / h;
-    const viewH = Math.max((4.9 * h) / freeH, (3.1 * w) / freeW / aspect);
+    const viewH = Math.max(6.5, 12.6 / aspect);
     this.camera.aspect = aspect;
     this.camDist = viewH / (2 * Math.tan((15 * Math.PI) / 180));
     this.placeCamera();
-    this.camera.setViewOffset(w, h, w / 2 - cx, h / 2 - cy, w, h);
     this.camera.updateProjectionMatrix();
     // Cover-fit the background the way CSS background-size: cover would.
     const bgAspect = 2;
@@ -728,14 +731,14 @@ export class DrinkStage {
     this.sceneryOnly.forEach((m) => (m.visible = false));
     const bg = this.scene.background;
     const turn = this.servingG.rotation.y;
-    const phase = this.phase;
     this.scene.background = null;
     this.servingG.rotation.y = 0;
+    this.servingG.position.x = 0;
+    this.servingG.visible = true;
+    this.serveScale = 1;
     this.setGarnish('none', true);
-    this.phase = 'serving';
-    this.syncVessels();
     this.setVessel(o.vessel, true);
-    this.applyDrink({ base: o.base, milk: o.milk, ice: o.ice, garnish: o.garnish, mix: 1, vessel: o.vessel }, true);
+    this.applyDrink({ base: o.base, milk: o.milk, ice: o.ice, garnish: o.garnish, mix: 1, vessel: o.vessel, poured: true }, true);
 
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(420, 330, false);
@@ -748,88 +751,16 @@ export class DrinkStage {
 
     this.scene.background = bg;
     this.servingG.rotation.y = turn;
+    this.servingG.position.x = SERVE_HOME.x;
+    this.serveScale = SERVE_SCALE;
     this.sceneryOnly.forEach((m, i) => (m.visible = keep[i]));
     this.setGarnish('none', true);
-    this.phase = phase;
     this.level = 0;
     this.setVessel(current.vessel ?? 'cup', false);
-    this.syncVessels();
+    this.servingG.visible = this.hasVessel;
     this.applyDrink(current, true);
     this.layout();
     return url;
   }
 
-  /** Renders every ingredient, ice amount, garnish and vessel to an image for the panel cards. */
-  buildIcons(): Record<string, string> {
-    const scene = new T.Scene();
-    scene.environment = this.env;
-    const light = new T.DirectionalLight(0xffffff, 1.7);
-    light.position.set(-2, 3, 4);
-    scene.add(light, new T.AmbientLight(0xffffff, 0.4));
-    const cam = new T.PerspectiveCamera(26, 1, 0.1, 50);
-    const shoot = (o: T.Object3D, tilt: number) => {
-      scene.add(o);
-      o.updateMatrixWorld(true);
-      const box = new T.Box3().setFromObject(o);
-      const c = box.getCenter(new T.Vector3());
-      const s = box.getSize(new T.Vector3());
-      const d = (Math.max(s.x, s.y) * 1.2) / (2 * Math.tan((13 * Math.PI) / 180)) + s.z / 2;
-      cam.position.set(c.x, c.y + d * tilt, c.z + d);
-      cam.lookAt(c);
-      this.renderer.render(scene, cam);
-      const url = this.els.canvas.toDataURL('image/png');
-      scene.remove(o);
-      return url;
-    };
-    const vesselIcon = (k: VesselId) => {
-      const g = new T.Group();
-      const pts = vesselPts(k, true).filter((p) => p.y < 2.2).map((p) => vec2(p.x * 0.94, p.y));
-      pts.push(vec2(0.001, 2.2));
-      g.add(buildShell(k, true), new T.Mesh(new T.LatheGeometry(pts, 48), new T.MeshStandardMaterial({ color: 0xd8560c, roughness: 0.3 })));
-      g.scale.z = k === 'bag' ? 0.82 : 1;
-      return g;
-    };
-    const flatLime = () => {
-      const m = makeLime();
-      m.rotation.x = 1.25;
-      return m;
-    };
-    const tiltedStraw = () => {
-      const s = makeStraw('cup');
-      s.rotation.z = -0.1;
-      return s;
-    };
-    const models: Record<string, () => T.Object3D> = {
-      v_cup: () => vesselIcon('cup'),
-      v_bag: () => vesselIcon('bag'),
-      tea: () => makeTin('ชาไทย', '#d9601a', '#fff3df'),
-      black: () => makeTin('ชาดำ', '#5a2410', '#f6d9a8'),
-      green: () => makeTin('ชาเขียว', '#5f9b2a', '#f4f7e0'),
-      coffee: () => makeTin('กาแฟ', '#3a2013', '#f3d9a4'),
-      pea: () => makeBottle('อัญชัน', '#2a3cc4'),
-      red: () => makeBottle('น้ำแดง', '#d6243c'),
-      cond: () => makeCan('นมข้น', '#f4ecd8', '#1d5aa8'),
-      evap: () => makeCan('นมระเหย', '#c8342f', '#fff'),
-      syrup: () => makeBottle('น้ำเชื่อม', '#e8c77a'),
-      soda: () => makeBottle('โซดา', '#bfe4f2'),
-      lemon: () => makeBottle('มะนาว', '#cfdc4a'),
-      dump: makeRing,
-      i_none: makeRing,
-      i_little: () => makeIcePile(3),
-      i_normal: () => makeIcePile(5),
-      i_lots: () => makeIcePile(8),
-      g_none: makeRing,
-      g_straw: tiltedStraw,
-      g_lime: flatLime,
-      g_mint: makeMint,
-      g_pea: makePeaFlower,
-      g_marigold: makeMarigold,
-    };
-    this.renderer.setPixelRatio(1);
-    this.renderer.setSize(220, 220, false);
-    this.renderer.setClearColor(0, 0);
-    const icons: Record<string, string> = {};
-    for (const k of Object.keys(models)) icons[k] = shoot(models[k](), k.startsWith('i_') ? 0.42 : 0.14);
-    return icons;
-  }
 }
