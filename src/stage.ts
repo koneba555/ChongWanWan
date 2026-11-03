@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { canvasOf, ctx2d, mixHex, paintBackground, paintEnv, paintTerrazzo, radial, rng, texOf } from './art';
 import { BASE, ICE, POWDER, baseDissolved, drinkMl, type Drink, type GarnishId, type Order, type VesselId } from './data';
-import { iceCube, makeFrother, makeGarnish, makePaperCarrier, pearlMat, spline } from './models';
+import { iceCube, makeFrother, makeGarnish, makePaperCarrier, makeSealFilm, makeWhip, pearlMat, spline } from './models';
 
 const reduceMotion = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const vec2 = (x: number, y: number) => new T.Vector2(x, y);
@@ -127,6 +127,9 @@ export class DrinkStage {
 
   private readonly servingG = new T.Group();
   private readonly pearls = new T.Group();
+  private readonly whip = makeWhip();
+  /** Sealing film on the cup rim, at the height of the rim ring. */
+  private readonly film = makeSealFilm(0.885);
   private readonly shells: Record<string, T.Group> = {};
   private shellNow: T.Group | null = null;
   private vessel: VesselId = 'cup';
@@ -250,7 +253,10 @@ export class DrinkStage {
       }
     });
     this.pearls.visible = false;
-    this.servingG.add(this.pearls);
+    this.whip.visible = false;
+    this.film.visible = false;
+    this.film.position.y = 3.075;
+    this.servingG.add(this.pearls, this.whip, this.film);
 
     const rb = rng(9);
     for (let i = 0; i < BUBBLES; i++) this.bubbleState.push({ a: rb() * 6.28, rf: Math.sqrt(rb()) * 0.82, y: rb(), v: 0.05 + rb() * 0.14 });
@@ -586,6 +592,8 @@ export class DrinkStage {
     if (powder) this.powder.material.color.set(powder);
     this.cubes.forEach((c, i) => (c.visible = i < ICE[s.ice].k));
     this.pearls.visible = s.pearls;
+    this.whip.visible = s.whip;
+    this.film.visible = s.sealed;
     this.setGarnish(s.garnish, instant);
     if (instant) {
       this.level = this.levelTarget;
@@ -617,6 +625,8 @@ export class DrinkStage {
       const r = this.radiusAt(py) * 0.94 - 0.06;
       p.position.set(Math.cos(d.a) * r, py, Math.sin(d.a) * r);
     });
+    // The cream sits on the drink, topping out under the dome lid.
+    this.whip.position.y = Math.min(2.85, has ? y - 0.1 : floor + 1);
     if (this.garnishObj && this.garnishObj.userData.float !== undefined) {
       this.garnishObj.position.set(this.garnishObj.userData.float, (has ? y : floor + 0.3) + 0.06 + motion * Math.sin(elapsed * 0.8) * 0.012, 0.32);
     }
@@ -817,8 +827,8 @@ export class DrinkStage {
     this.servingG.visible = true;
     this.serveScale = 1;
     this.setGarnish('none', true);
-    this.setVessel(o.vessel, true);
-    this.applyDrink({ base: o.base, milk: o.milk, ice: o.ice, garnish: o.garnish, mix: 1, vessel: o.vessel, poured: true, pearls: o.pearls }, true);
+    this.setVessel(o.vessel, !o.sealed);
+    this.applyDrink({ base: o.base, milk: o.milk, ice: o.ice, garnish: o.garnish, mix: 1, vessel: o.vessel, poured: true, pearls: o.pearls, whip: o.whip, sealed: o.sealed }, true);
 
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(420, 330, false);

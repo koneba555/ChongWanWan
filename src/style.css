@@ -221,3 +221,8 @@ img { max-width: 100%; }
 .phone-cta svg { flex: none; width: 34px; height: 34px; }
 .phone-cta b { display: block; font-size: 17px; font-weight: 500; }
 .phone-cta small { font-size: 12.5px; font-weight: 300; }
+
+/* QR sound box: announces each payment under the money pill. */
+#ding { position: absolute; z-index: 5; right: max(24px, env(safe-area-inset-right, 0px)); top: 62px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; color: #fff; background: #18227a; border: 1px solid #8fa0ff88; border-radius: 99px; padding: 6px 14px 6px 10px; box-shadow: 0 6px 16px #0007; animation: ding-in .25s ease-out; }
+#ding::before { content: ""; width: 18px; height: 18px; background: #fff; clip-path: polygon(0 35%, 30% 35%, 65% 5%, 65% 95%, 30% 65%, 0 65%); }
+@keyframes ding-in { from { transform: translateY(-8px) scale(.9); opacity: 0; } }

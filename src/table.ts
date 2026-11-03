@@ -1,10 +1,10 @@
 import * as T from 'three';
 import { ADD, ADD_IDS, BASE, GARNISH, VESSEL, type AddId, type BaseId, type VesselId } from './data';
-import { makeBottle, makeCan, makeCarryBag, makeCooler, makeFrother, makeGarnish, makeHookRail, makeHotPot, makeLimeBowl, makePearlBowl, makePlate, makeSodaBottle, makeTableSpoon, makeThermoPot, makeTin, makeUtensilCup, makeVesselStack } from './models';
+import { makeBottle, makeCan, makeCarryBag, makeCooler, makeFrother, makeGarnish, makeHookRail, makeHotPot, makeLimeBowl, makePearlBowl, makePlate, makeQrStand, makeSealer, makeWhipCan, makeSodaBottle, makeTableSpoon, makeThermoPot, makeTin, makeUtensilCup, makeVesselStack } from './models';
 import type { UpgradeId } from './shop';
 import { buildShell, CUP_HOME, SERVE_HOME, type DrinkStage } from './stage';
 
-export type ItemKind = 'base' | 'add' | 'garnish' | 'topping' | 'vessel' | 'spoon' | 'frother' | 'glass' | 'cooler' | 'ready';
+export type ItemKind = 'base' | 'add' | 'garnish' | 'topping' | 'sealer' | 'vessel' | 'spoon' | 'frother' | 'glass' | 'cooler' | 'ready';
 export type DropTarget = 'cup' | 'serve';
 
 export interface TableItem {
@@ -215,6 +215,17 @@ export class Table {
     const pearl = this.add('topping', 'pearl', 'ไข่มุกบุก (ตักใส่ภาชนะ)', makePearlBowl(), 3.95, 0.02, -0.3, 0.62);
     this.upgradeItems.frother = { on: [frother], off: [] };
     this.upgradeItems.pearl = { on: [pearl], off: [] };
+    const whip = this.add('topping', 'whip', 'วิปครีม (โปะหน้าแก้ว)', makeWhipCan(), 2.7, 0.02, 0.2, 0.55);
+    const sealer = this.add('sealer', 'sealer', 'เครื่องซีลฝา (กดเพื่อซีล)', makeSealer(), 3.05, 0.02, 1.85, 0.7);
+    sealer.press = true;
+    this.upgradeItems.whip = { on: [whip], off: [] };
+    this.upgradeItems.sealer = { on: [sealer], off: [] };
+    const qr = makeQrStand();
+    qr.position.set(-2.85, 0.02, -0.45);
+    qr.rotation.y = 0.35;
+    qr.scale.setScalar(0.75);
+    this.stage.tableG.add(qr);
+    this.upgradeProps.qr = { on: [qr], off: [] };
     (['cocoa', 'matcha'] as const).forEach((k) => (this.upgradeItems[k] = { on: [this.find('base', k) as TableItem], off: [] }));
     this.upgradeItems.kettle = { on: [kettle], off: [find('add', 'hot', kettle)] };
     this.upgradeItems.lime = { on: [lime], off: [find('add', 'lemon', lime)] };

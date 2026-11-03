@@ -17,6 +17,10 @@ export interface Drink {
   poured: boolean;
   /** Tapioca pearls ladled into the serving vessel before the pour. */
   pearls: boolean;
+  /** Whipped cream piped on top of a poured cup. */
+  whip: boolean;
+  /** Cup sealed with film by the sealer, instead of a dome lid. */
+  sealed: boolean;
 }
 
 export interface Order {
@@ -32,6 +36,8 @@ export interface Order {
   garnish: GarnishId;
   vessel: VesselId;
   pearls: boolean;
+  whip: boolean;
+  sealed: boolean;
 }
 
 /** milk: colour the base turns toward; mk0/mk1: how far one part of milk moves it. */
@@ -113,9 +119,11 @@ export const blankDrink = (): Drink => ({
   vessel: null,
   poured: false,
   pearls: false,
+  whip: false,
+  sealed: false,
 });
 
-type OrderSpec = Omit<Order, 'milk' | 'ice' | 'pearls'> & { milk: Partial<Additions>; pearls?: boolean };
+type OrderSpec = Omit<Order, 'milk' | 'ice' | 'pearls' | 'whip' | 'sealed'> & { milk: Partial<Additions>; pearls?: boolean; whip?: boolean; sealed?: boolean };
 
 const ORDER_SPECS: OrderSpec[] = [
   { name: 'ชาเย็น หวานน้อย', who: 'ป้าแจ่ม', skin: '#e7b58e', hair: '#6b6b6b', top: '#c0392b', quote: 'ชาเย็นใส่ถุงหิ้วนะลูก หวานน้อย ขอหลอดด้วย', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'carrier' },
@@ -135,18 +143,25 @@ const ORDER_SPECS: OrderSpec[] = [
   { name: 'ชานมไข่มุก', who: 'พี่บอส', skin: '#d9a67c', hair: '#120c08', top: '#2d2d2d', quote: 'ชานมไข่มุกใส่ถุงหิ้ว หวานปกติ ขอหลอดครับ', base: 'black', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'carrier', pearls: true },
   { name: 'โกโก้ไข่มุก', who: 'น้องข้าวปั้น', skin: '#f6d3b3', hair: '#3a2415', top: '#ffd166', quote: 'โกโก้ไข่มุกใส่แก้ว หวานมาก ขอหลอดด้วย', base: 'cocoa', milk: { hot: 1, cond: 3 }, garnish: 'straw', vessel: 'cup', pearls: true },
   { name: 'มัทฉะไข่มุก', who: 'คุณนิด', skin: '#e9bf98', hair: '#6b6b6b', top: '#5b8c5a', quote: 'มัทฉะไข่มุกใส่ถุงหิ้วจ้ะ หวานน้อย ใส่นมนิดนึง ขอหลอด', base: 'matcha', milk: { hot: 1, syrup: 1, evap: 1 }, garnish: 'straw', vessel: 'carrier', pearls: true },
+  // Phase 3: whipped cream on top, and delivery riders who need a sealed cup.
+  { name: 'ชาเย็นวิปครีม', who: 'น้องปอนด์', skin: '#f2c9a5', hair: '#24170e', top: '#ef476f', quote: 'ชาเย็นใส่แก้ว หวานน้อย โปะวิปครีมเยอะๆ ขอหลอดค่ะ', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'cup', whip: true },
+  { name: 'นมชมพูวิปครีม', who: 'น้องใบเตย', skin: '#f6d3b3', hair: '#3a2415', top: '#ffafcc', quote: 'นมชมพูใส่แก้ว หวานปกติ ใส่วิปครีมด้วย ขอหลอดค่ะ', base: 'red', milk: { cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup', whip: true },
+  { name: 'โกโก้วิปครีม', who: 'พี่แบงก์', skin: '#d9a67c', hair: '#120c08', top: '#264653', quote: 'โกโก้เย็นใส่แก้ว หวานปกติ โปะวิปครีม ขอหลอดครับ', base: 'cocoa', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup', whip: true },
+  { name: 'ชาเย็น ซีลฝา', who: 'ไรเดอร์ต้น', skin: '#c99068', hair: '#17110d', top: '#2a9d8f', quote: 'ไรเดอร์รับออเดอร์ครับ ชาเย็นใส่แก้ว ซีลฝาให้ด้วย หวานน้อย ขอหลอด', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'cup', sealed: true },
+  { name: 'กาแฟเย็น ซีลฝา', who: 'ไรเดอร์ฝน', skin: '#e9bf98', hair: '#2a1a10', top: '#e76f51', quote: 'ไรเดอร์ค่ะ กาแฟเย็นใส่แก้วซีลฝา นมเยอะ หวานปกติ ขอหลอด', base: 'coffee', milk: { hot: 1, cond: 2, evap: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
+  { name: 'น้ำแดงโซดา ซีลฝา', who: 'ไรเดอร์โจ้', skin: '#b98258', hair: '#231c17', top: '#2a9d8f', quote: 'ไรเดอร์ครับ น้ำแดงโซดาใส่แก้วซีลฝา หวานน้อย ขอหลอด', base: 'red', milk: { syrup: 1, soda: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
 ];
 
-export const ORDERS: Order[] = ORDER_SPECS.map((o) => ({ ...o, ice: COOLER_ICE, pearls: o.pearls ?? false, milk: { ...noAdditions(), ...o.milk } }));
+export const ORDERS: Order[] = ORDER_SPECS.map((o) => ({ ...o, ice: COOLER_ICE, pearls: o.pearls ?? false, whip: o.whip ?? false, sealed: o.sealed ?? false, milk: { ...noAdditions(), ...o.milk } }));
 
 /** A cup sells for this much, more for premium powders and pearls. */
 const PRICE = 45;
 const PREMIUM: BaseId[] = ['cocoa', 'matcha'];
-export const orderPrice = (o: Order) => PRICE + (PREMIUM.includes(o.base) ? 10 : 0) + (o.pearls ? 10 : 0);
+export const orderPrice = (o: Order) => PRICE + (PREMIUM.includes(o.base) ? 10 : 0) + (o.pearls ? 10 : 0) + (o.whip ? 10 : 0) + (o.sealed ? 5 : 0);
 
 export function recipeOf(o: Order): string {
   const added = ADD_IDS.filter((k) => o.milk[k]).map((k) => ADD[k] + (o.milk[k] > 1 ? ' ×' + o.milk[k] : ''));
-  return [BASE[o.base].n, ...added, ...(o.pearls ? ['ไข่มุก'] : [])].join(' + ');
+  return [BASE[o.base].n, ...added, ...(o.pearls ? ['ไข่มุก'] : []), ...(o.whip ? ['วิปครีม'] : []), ...(o.sealed ? ['ซีลฝา'] : [])].join(' + ');
 }
 
 export function sweetWord(m: Additions): string {
@@ -177,6 +192,8 @@ export function score(s: Drink, o: Order): Score {
     { label: 'หลอด', got: s.garnish === o.garnish ? 15 : 0, max: 15 },
   ];
   if (o.pearls || s.pearls) rows.push({ label: 'ไข่มุก', got: s.pearls === o.pearls ? 10 : 0, max: 10 });
+  if (o.whip || s.whip) rows.push({ label: 'วิปครีม', got: s.whip === o.whip ? 10 : 0, max: 10 });
+  if (o.sealed || s.sealed) rows.push({ label: 'ซีลฝา', got: s.sealed === o.sealed ? 10 : 0, max: 10 });
   // Out of 100, whatever rows the order has.
   const total = Math.round((rows.reduce((sum, r) => sum + r.got, 0) / rows.reduce((sum, r) => sum + r.max, 0)) * 100);
   const price = orderPrice(o);

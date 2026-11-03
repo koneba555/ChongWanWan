@@ -45,6 +45,8 @@ const PATIENCE_MIN = 90;
 const QUICK_TIP = 10;
 const QUICK_TIP_SHARE = 0.5;
 const LIME_TIP = 5;
+/** The QR stand makes customers willing to wait this much longer. */
+const QR_PATIENCE = 1.2;
 const FROTHER_SECONDS = 3;
 
 interface Customer {
@@ -68,7 +70,7 @@ function avatarSvg(o: Order): string {
 /** Short description of a finished drink, for its name tag on the hook. */
 function describe(d: Drink): string {
   const parts = [d.base ? BASE[d.base].n : 'ไม่มีน้ำฐาน', ...ADD_IDS.filter((k) => d.milk[k]).map((k) => ADD[k] + (d.milk[k] > 1 ? ` ×${d.milk[k]}` : ''))];
-  return `${parts.join(' + ')}${d.pearls ? ' + ไข่มุก' : ''}${d.garnish === 'straw' ? ' · มีหลอด' : ''}`;
+  return `${parts.join(' + ')}${d.pearls ? ' + ไข่มุก' : ''}${d.whip ? ' + วิปครีม' : ''}${d.sealed ? ' · ซีลฝา' : ''}${d.garnish === 'straw' ? ' · มีหลอด' : ''}`;
 }
 
 export function startGame(stage: DrinkStage): void {
@@ -118,6 +120,18 @@ export function startGame(stage: DrinkStage): void {
   const trayCount = () => tray.filter(Boolean).length;
   const persist = () => writeSave({ day, money, owned: [...owned] });
   const showMoney = () => ($('#money-n').textContent = String(money));
+  let dingTimer = 0;
+  /** The QR sound box reads out each payment. */
+  const ding = (amount: number) => {
+    const box = $('#ding');
+    box.textContent = `ได้รับเงิน ${amount} บาท`;
+    box.hidden = false;
+    box.style.animation = 'none';
+    void box.offsetWidth;
+    box.style.animation = '';
+    clearTimeout(dingTimer);
+    dingTimer = window.setTimeout(() => (box.hidden = true), 2400);
+  };
 
   // Upgrades are bought on the phone shop app, opened from the end-of-day card.
   const phone = new Phone({
@@ -163,6 +177,10 @@ export function startGame(stage: DrinkStage): void {
       if (owned.has('pearl') && !drink.pearls && waiting.some((c) => c?.order.pearls)) return 'ถ้าสั่งไข่มุก ลากชามไข่มุกมาตักใส่ภาชนะก่อน แล้วลากแก้วตวงไปเท';
       return 'ลากแก้วตวงไปเทลงภาชนะ';
     }
+    if (drink.vessel === 'cup' && !drink.whip && !drink.sealed) {
+      if (owned.has('whip') && waiting.some((c) => c?.order.whip)) return 'ถ้าสั่งวิปครีม ลากกระป๋องวิปครีมมาโปะหน้าแก้ว แล้วค่อยใส่หลอดและแขวนรอส่ง';
+      if (owned.has('sealer') && waiting.some((c) => c?.order.sealed)) return 'ไรเดอร์ขอซีลฝา กดที่เครื่องซีลข้างภาชนะ แล้วค่อยใส่หลอดและแขวนรอส่ง';
+    }
     return 'ถ้าลูกค้าขอหลอด ลากหลอดข้างนมข้นมาใส่ แล้วกดปุ่มใต้ภาชนะเพื่อแขวนรอส่ง';
   }
 
@@ -178,6 +196,8 @@ export function startGame(stage: DrinkStage): void {
     if (parts.length) extras.push(`คนแล้ว ${Math.round(drink.mix * 100)}%`);
     if (drink.vessel) extras.push(VESSEL[drink.vessel]);
     if (drink.pearls) extras.push('ไข่มุก');
+    if (drink.whip) extras.push('วิปครีม');
+    if (drink.sealed) extras.push('ซีลฝาแล้ว');
     if (drink.garnish !== 'none') extras.push(GARNISH[drink.garnish]);
     extras.push(`แขวนรอส่ง ${trayCount()}/${hookCount(owned)}`);
     lines.push(extras.join(' · '));
@@ -266,7 +286,9 @@ export function startGame(stage: DrinkStage): void {
         case 'garnish':
           return drink.vessel ? ['serve'] : [];
         case 'topping':
+          if (item.key === 'whip') return drink.poured && drink.vessel === 'cup' && !drink.whip && !drink.sealed ? ['serve'] : [];
           return drink.vessel && !drink.poured && !drink.pearls ? ['serve'] : [];
+        case 'sealer':
         case 'cooler':
         case 'ready':
           return [];
@@ -306,6 +328,9 @@ export function startGame(stage: DrinkStage): void {
         }
         drink.poured = true;
         stage.startPour(drink);
+      } else if (item.kind === 'topping' && item.key === 'whip') {
+        drink.whip = true;
+        act = { pos: aboveServe(4.4), tilt: -2.7, seconds: 0.9 };
       } else if (item.kind === 'topping') {
         drink.pearls = true;
         act = { pos: aboveServe(3.1), tilt: -1.0, seconds: 0.8 };
@@ -319,9 +344,22 @@ export function startGame(stage: DrinkStage): void {
       return act;
     },
     press(item) {
-      // Only the thermo pot acts on a press: a pump of hot water into the measuring glass.
-      if (!dayOpen || stage.pouring || item.key !== 'hot') return;
-      addToGlass('hot');
+      if (!dayOpen || stage.pouring) return;
+      // The thermo pot pumps hot water into the measuring glass.
+      if (item.key === 'hot') {
+        addToGlass('hot');
+        return;
+      }
+      // The sealer presses film onto the poured cup on the mat.
+      if (item.key !== 'sealer') return;
+      if (!drink.poured || drink.vessel !== 'cup') say('ซีลได้เฉพาะแก้วพลาสติกที่เทน้ำแล้ว');
+      else if (drink.whip) say('แก้ววิปครีมซีลไม่ได้ ใช้ฝาโดมแทน');
+      else if (drink.sealed) say('แก้วนี้ซีลฝาแล้ว');
+      else {
+        drink.sealed = true;
+        stage.applyDrink(drink, false);
+        updateHud();
+      }
     },
     tagExtra(item) {
       if (item.kind === 'add' && drink.milk[item.key as AddId]) return `×${drink.milk[item.key as AddId]}`;
@@ -356,7 +394,8 @@ export function startGame(stage: DrinkStage): void {
 
   /** Picks a customer who isn't already waiting, when there are enough to choose from. */
   /** Menus that need a bought powder or topping only come up once the cart has it. */
-  const canMake = (o: Order) => (o.base !== 'cocoa' || owned.has('cocoa')) && (o.base !== 'matcha' || owned.has('matcha')) && (!o.pearls || owned.has('pearl'));
+  const canMake = (o: Order) =>
+    (o.base !== 'cocoa' || owned.has('cocoa')) && (o.base !== 'matcha' || owned.has('matcha')) && (!o.pearls || owned.has('pearl')) && (!o.whip || owned.has('whip')) && (!o.sealed || owned.has('sealer'));
 
   function newOrder(): Order {
     const here = waiting.filter((c): c is Customer => c !== null).map((c) => c.order);
@@ -377,7 +416,8 @@ export function startGame(stage: DrinkStage): void {
     arrived++;
     const order = first ?? newOrder();
     thumbFor(order);
-    const total = Math.max(PATIENCE_MIN, PATIENCE_START - (day - 1) * PATIENCE_DROP_PER_DAY);
+    // With the QR stand nobody waits for change, so customers put up with a longer wait.
+    const total = Math.max(PATIENCE_MIN, PATIENCE_START - (day - 1) * PATIENCE_DROP_PER_DAY) * (owned.has('qr') ? QR_PATIENCE : 1);
     return { order, patience: total, total };
   }
 
@@ -459,6 +499,7 @@ export function startGame(stage: DrinkStage): void {
     showMoney();
     persist();
     const tipText = tip ? ` · ทิป ${tip}${lime ? ` (มะนาวสด ${lime})` : ''}` : '';
+    if (owned.has('qr') && r.pay) ding(r.pay + tip);
     showResult(r.verdict, `${c.order.who} · ${r.pay ? `+${r.pay} บาท${tipText}` : 'ไม่ได้เงิน'}`, r.rows);
     customerDone(slot);
   }
@@ -491,7 +532,7 @@ export function startGame(stage: DrinkStage): void {
       return;
     }
     stopStirring();
-    stage.setVessel(drink.vessel, true);
+    stage.setVessel(drink.vessel, !drink.sealed);
     const item = table.addReady(stage.bakeServing(), slot, VESSEL[drink.vessel]);
     tray[slot] = { drink: { ...drink, milk: { ...drink.milk } }, item };
     clearDrink();
@@ -707,6 +748,8 @@ export function startGame(stage: DrinkStage): void {
       // Swap the first waiting customer for a lemon order (to try the fresh-lime tip) or a pearl order.
       'dev-lemon': () => devOrder((o) => o.milk.lemon > 0),
       'dev-pearl': () => devOrder((o) => o.pearls),
+      'dev-whip': () => devOrder((o) => o.whip),
+      'dev-sealed': () => devOrder((o) => o.sealed),
       'dev-rush': () => {
         waiting.forEach((c) => c && (c.patience = Math.min(c.patience, 5)));
       },

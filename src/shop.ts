@@ -1,4 +1,4 @@
-export type UpgradeId = 'frother' | 'kettle' | 'lime' | 'cocoa' | 'matcha' | 'pearl' | 'hook';
+export type UpgradeId = 'frother' | 'kettle' | 'lime' | 'cocoa' | 'matcha' | 'pearl' | 'hook' | 'whip' | 'sealer' | 'qr';
 
 export type Category = 'machine' | 'fresh' | 'topping' | 'tools' | 'pack';
 
@@ -32,8 +32,6 @@ export interface ComingSoon {
 }
 
 export const COMING_SOON: ComingSoon[] = [
-  { key: 'whip', name: 'วิปครีมกระป๋อง', category: 'topping', price: 250 },
-  { key: 'sealer', name: 'เครื่องซีลฝาแก้ว', category: 'pack', price: 650 },
   { key: 'espresso', name: 'เครื่องชงเอสเพรสโซ', category: 'machine', price: 1500 },
 ];
 
@@ -45,6 +43,9 @@ export const UPGRADES: Upgrade[] = [
   { id: 'matcha', name: 'ผงมัทฉะแท้', price: 450, effect: 'วางกระป๋องมัทฉะบนชั้น ปลดล็อกเมนูมัทฉะ ขายแก้วละ 55 บาท', category: 'fresh', was: 590, sold: 6100, stars: 4.9, seller: 'ไร่ชาดอยเหมียว' },
   { id: 'pearl', name: 'ไข่มุกบุก พร้อมชามและกระบวย', price: 500, effect: 'ลากชามไข่มุกไปตักใส่ภาชนะก่อนเท ปลดล็อกเมนูไข่มุก ได้เพิ่มแก้วละ 10 บาท', category: 'topping', was: 650, sold: 22000, stars: 4.7, seller: 'ท็อปปิ้งแมวอ้วน' },
   { id: 'hook', name: 'ตะขอตัว S เพิ่ม 1 ช่อง', price: 250, effect: 'แขวนน้ำรอส่งได้ 4 ถุง ชงล่วงหน้าได้มากขึ้นตอนลูกค้ามาพร้อมกัน', category: 'tools', was: 320, sold: 4500, stars: 4.6, seller: 'เหล็กดัดเหมียวการช่าง' },
+  { id: 'whip', name: 'วิปครีมกระป๋อง', price: 300, effect: 'กดวิปครีมโปะหน้าแก้วหลังเทน้ำ ปลดล็อกเมนูวิปครีม ได้เพิ่มแก้วละ 10 บาท', category: 'topping', was: 390, sold: 15300, stars: 4.8, seller: 'ท็อปปิ้งแมวอ้วน' },
+  { id: 'sealer', name: 'เครื่องซีลฝาแก้ว', price: 650, effect: 'กดที่เครื่องเพื่อซีลฝาแก้วที่เทแล้ว ไรเดอร์จะเริ่มมารับออเดอร์ที่ต้องซีลฝา ได้เพิ่มแก้วละ 5 บาท', category: 'pack', was: 1290, sold: 3700, stars: 4.7, seller: 'แพ็กเกจจิ้งเหมียวโปร' },
+  { id: 'qr', name: 'ป้าย QR กับกล่องเสียงรับเงิน', price: 400, effect: 'ลูกค้าสแกนจ่ายได้ ไม่ต้องรอทอน ลูกค้ายอมรอนานขึ้น 20% และกล่องเสียงบอกยอดเงินทุกครั้งที่ได้เงิน', category: 'tools', was: 590, sold: 41000, stars: 4.9, seller: 'เหมียวเพย์ ช็อป' },
 ];
 
 export interface Save {

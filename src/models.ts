@@ -676,3 +676,124 @@ export function makePearlBowl(): T.Group {
   g.add(ladle);
   return g;
 }
+
+/** Soft white swirl of whipped cream, sized to sit on top of a plastic cup. */
+export function makeWhip(): T.Group {
+  const cream = new T.MeshStandardMaterial({ color: 0xfffaf0, roughness: 0.65, emissive: 0xfff4e0, emissiveIntensity: 0.12 });
+  const g = new T.Group();
+  [[0.66, 0.16], [0.54, 0.15], [0.41, 0.14], [0.27, 0.12]].forEach(([r, tube], i) => {
+    const ring = new T.Mesh(new T.TorusGeometry(r, tube, 12, 40), cream);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.12 + i * 0.17;
+    g.add(ring);
+  });
+  const fill = new T.Mesh(new T.CylinderGeometry(0.55, 0.7, 0.4, 32), cream);
+  fill.position.y = 0.16;
+  const tip = new T.Mesh(new T.ConeGeometry(0.17, 0.32, 20), cream);
+  tip.position.y = 0.78;
+  g.add(fill, tip);
+  return g;
+}
+
+/** Spray can of whipped cream with a nozzle. */
+export function makeWhipCan(): T.Group {
+  const g = new T.Group();
+  const body = new T.Mesh(new T.CylinderGeometry(0.32, 0.32, 1.5, 32), new T.MeshStandardMaterial({ map: labelTex('วิปครีม', '#6a8fd8', '#fff', 92), metalness: 0.4, roughness: 0.3 }));
+  body.position.y = 0.75;
+  const steel = new T.MeshStandardMaterial({ color: 0xd8d6e2, metalness: 0.9, roughness: 0.25 });
+  const shoulder = new T.Mesh(new T.SphereGeometry(0.32, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), steel);
+  shoulder.position.y = 1.5;
+  shoulder.scale.y = 0.5;
+  const nozzle = new T.Mesh(new T.ConeGeometry(0.09, 0.36, 12), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }));
+  nozzle.position.y = 1.8;
+  g.add(body, shoulder, nozzle);
+  return g;
+}
+
+/** Printed film the sealer presses onto a cup rim. */
+export function makeSealFilm(radius: number): T.Mesh {
+  const c = canvasOf(256, 256);
+  const x = ctx2d(c);
+  x.fillStyle = '#ffe3ec';
+  x.fillRect(0, 0, 256, 256);
+  x.fillStyle = '#ff6b9a';
+  for (let i = 0; i < 9; i++) {
+    for (let j = 0; j < 9; j++) if ((i + j) % 2 === 0) x.fillRect(i * 32, j * 32, 10, 10);
+  }
+  x.fillStyle = '#d92c6a';
+  x.font = '500 40px Mitr,Tahoma,sans-serif';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillText('ชงหวาน', 128, 112);
+  x.fillText('หวาน', 128, 156);
+  const film = new T.Mesh(new T.CircleGeometry(radius, 48), new T.MeshPhysicalMaterial({ map: texOf(c), roughness: 0.25, clearcoat: 1, transparent: true, opacity: 0.88, side: T.DoubleSide }));
+  film.rotation.x = -Math.PI / 2;
+  return film;
+}
+
+/** Cup sealer machine: a base with a cup well, and a red press head on a column. */
+export function makeSealer(): T.Group {
+  const g = new T.Group();
+  const grey = new T.MeshStandardMaterial({ color: 0xe6e1d6, roughness: 0.4 });
+  const red = new T.MeshStandardMaterial({ color: 0xd8312a, roughness: 0.35 });
+  const dark = new T.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.5 });
+  const base = new T.Mesh(new T.BoxGeometry(1.3, 0.45, 1.1), grey);
+  base.position.y = 0.225;
+  const well = new T.Mesh(new T.CylinderGeometry(0.34, 0.34, 0.06, 32), dark);
+  well.position.set(0, 0.47, 0.1);
+  const column = new T.Mesh(new T.BoxGeometry(1.3, 1.3, 0.35), grey);
+  column.position.set(0, 1.0, -0.38);
+  const head = new T.Mesh(new T.BoxGeometry(1.1, 0.42, 0.85), red);
+  head.position.set(0, 1.45, 0.05);
+  const handle = new T.Mesh(new T.CylinderGeometry(0.05, 0.05, 0.9, 10), dark);
+  handle.rotation.z = Math.PI / 2;
+  handle.position.set(0, 1.5, 0.55);
+  const screen = new T.Mesh(new T.PlaneGeometry(0.42, 0.16), new T.MeshBasicMaterial({ color: 0x7fe08a }));
+  screen.position.set(0.3, 0.3, 0.556);
+  g.add(base, well, column, head, handle, screen);
+  return g;
+}
+
+/** Acrylic QR stand with a little payment sound box beside it. */
+export function makeQrStand(): T.Group {
+  const g = new T.Group();
+  const c = canvasOf(256, 320);
+  const x = ctx2d(c);
+  x.fillStyle = '#ffffff';
+  x.fillRect(0, 0, 256, 320);
+  x.fillStyle = '#18227a';
+  x.fillRect(0, 0, 256, 54);
+  x.fillStyle = '#fff';
+  x.font = '500 30px Mitr,Tahoma,sans-serif';
+  x.textAlign = 'center';
+  x.fillText('สแกนจ่าย', 128, 38);
+  // A made-up pattern in the shape of a QR code; it does not encode anything.
+  const r = rng(77);
+  x.fillStyle = '#111';
+  for (let i = 0; i < 17; i++) for (let j = 0; j < 17; j++) if (r() > 0.55) x.fillRect(40 + i * 10, 74 + j * 10, 10, 10);
+  [[40, 74], [146, 74], [40, 180]].forEach(([a, b]) => {
+    x.fillStyle = '#111';
+    x.fillRect(a, b, 70, 70);
+    x.fillStyle = '#fff';
+    x.fillRect(a + 10, b + 10, 50, 50);
+    x.fillStyle = '#111';
+    x.fillRect(a + 20, b + 20, 30, 30);
+  });
+  x.fillStyle = '#ff5a24';
+  x.fillRect(40, 268, 176, 30);
+  const card = new T.Mesh(new T.PlaneGeometry(0.8, 1.0), new T.MeshStandardMaterial({ map: texOf(c), roughness: 0.4 }));
+  card.position.set(0, 0.62, 0);
+  card.rotation.x = -0.12;
+  const acrylic = new T.Mesh(new T.BoxGeometry(0.88, 1.1, 0.04), new T.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.05, transparent: true, opacity: 0.25 }));
+  acrylic.position.set(0, 0.62, -0.03);
+  acrylic.rotation.x = -0.12;
+  const foot = new T.Mesh(new T.BoxGeometry(0.88, 0.06, 0.4), acrylic.material);
+  foot.position.y = 0.03;
+  const box = new T.Mesh(new T.CylinderGeometry(0.22, 0.24, 0.42, 24), new T.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.5 }));
+  box.position.set(0.7, 0.21, 0.05);
+  const grille = new T.Mesh(new T.CircleGeometry(0.16, 20), new T.MeshStandardMaterial({ color: 0x666666, roughness: 0.8 }));
+  grille.rotation.x = -Math.PI / 2;
+  grille.position.set(0.7, 0.425, 0.05);
+  g.add(card, acrylic, foot, box, grille);
+  return g;
+}
