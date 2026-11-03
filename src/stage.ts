@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { canvasOf, ctx2d, mixHex, paintBackground, paintEnv, paintTerrazzo, radial, rng, texOf } from './art';
 import { BASE, ICE, POWDER, baseDissolved, drinkMl, type Drink, type GarnishId, type Order, type VesselId } from './data';
-import { iceCube, makeGarnish, makePaperCarrier, spline } from './models';
+import { iceCube, makeFrother, makeGarnish, makePaperCarrier, spline } from './models';
 
 const reduceMotion = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const vec2 = (x: number, y: number) => new T.Vector2(x, y);
@@ -145,6 +145,7 @@ export class DrinkStage {
   private serveScale = SERVE_SCALE;
   private readonly cupLiquid = new T.Mesh(new T.BufferGeometry(), this.liquidMat);
   private readonly spoon = new T.Group();
+  private readonly frother = makeFrother();
   private readonly powder = new T.Mesh(new T.SphereGeometry(0.42, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xe2742a, roughness: 0.95 }));
   private cupLevel = 0;
   private cupTarget = 0;
@@ -381,6 +382,10 @@ export class DrinkStage {
     spoon.add(arm);
     spoon.visible = false;
     cupG.add(spoon);
+    this.frother.position.set(0.05, CUP_FLOOR + 0.04, 0);
+    this.frother.scale.setScalar(0.85);
+    this.frother.visible = false;
+    cupG.add(this.frother);
   }
 
   private radiusAt(y: number): number {
@@ -644,9 +649,15 @@ export class DrinkStage {
     this.level = 0;
   }
 
-  /** Spins the spoon and carries the liquid's swirl along with it. */
+  /** Stands the frother in the measuring glass, or takes it out. */
+  setFrother(on: boolean): void {
+    this.frother.visible = on;
+  }
+
+  /** Spins the spoon or frother and carries the liquid's swirl along with it. */
   setStirAngle(angle: number): void {
     this.spoon.rotation.y = -angle;
+    this.frother.rotation.y = -angle * 3;
     this.cupLiquid.rotation.y = -angle * 0.7;
   }
 

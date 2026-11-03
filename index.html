@@ -15,7 +15,7 @@
     <canvas id="gl" aria-label="เครื่องดื่มสามมิติบนเคาน์เตอร์หินขัด"></canvas>
     <canvas id="garland" aria-hidden="true"></canvas>
     <div id="top">
-      <div id="brand"><small>ชงหวานหวาน · รถเข็นหน้าโรงเรียน</small><b>เสิร์ฟแล้ว <span id="order-no">0</span> แก้ว</b></div>
+      <div id="brand"><small>ชงหวานหวาน · รถเข็นหน้าโรงเรียน</small><b>วันที่ <span id="day">1</span> · ลูกค้า <span id="order-no">0</span>/<span id="day-total">8</span></b></div>
       <div id="money"><span id="money-n">0</span> บาท</div>
     </div>
     <aside id="orders" aria-label="ออเดอร์ที่รออยู่"></aside>
@@ -34,6 +34,16 @@
     <button type="button" class="pill under-glass" id="spoon-done" hidden>คนเสร็จ วางช้อน</button>
     <button type="button" class="pill under-glass" id="serve" hidden>เสร็จ แขวนรอส่ง</button>
     <section id="result-card" hidden></section>
+    <section id="day-card" hidden aria-live="polite"></section>
+    <aside id="dev-panel" hidden aria-label="Dev mode">
+      <button type="button" class="ghost" id="dev-toggle" aria-expanded="false" aria-controls="dev-tools">Dev</button>
+      <div id="dev-tools" hidden>
+        <button type="button" id="dev-end-day">ปิดร้านตอนนี้ (สรุปวัน + ร้านค้า)</button>
+        <button type="button" id="dev-money">เพิ่มเงิน 500 บาท</button>
+        <button type="button" id="dev-rush">ลูกค้าทุกคนเหลือเวลา 5 วินาที</button>
+        <button type="button" id="dev-reset">ล้างข้อมูลเกม เริ่มวันที่ 1</button>
+      </div>
+    </aside>
     <section id="unsupported" role="alert">
       <img src="/favicon.svg" alt="" width="64" height="64">
       <h1>ชงหวานหวาน</h1>

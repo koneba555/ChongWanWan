@@ -581,3 +581,69 @@ export function makeCarryBag(contents: T.Object3D): T.Group {
   });
   return g;
 }
+
+/** Handheld electric milk frother: black grip, steel shaft, wire whisk at the tip. */
+export function makeFrother(): T.Group {
+  const black = new T.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.45 });
+  const steel = new T.MeshStandardMaterial({ color: 0xe6e4df, metalness: 1, roughness: 0.2, envMapIntensity: 1.5 });
+  const g = new T.Group();
+  const whisk = new T.Mesh(new T.TorusGeometry(0.11, 0.018, 8, 24), steel);
+  whisk.rotation.x = Math.PI / 2;
+  whisk.position.y = 0.1;
+  const coil = new T.Mesh(new T.TorusGeometry(0.11, 0.008, 6, 40, Math.PI * 2), steel);
+  coil.rotation.x = Math.PI / 2;
+  coil.position.y = 0.06;
+  const shaft = new T.Mesh(new T.CylinderGeometry(0.022, 0.022, 1.15, 10), steel);
+  shaft.position.y = 0.68;
+  const grip = new T.Mesh(new T.CylinderGeometry(0.1, 0.085, 0.95, 20), black);
+  grip.position.y = 1.7;
+  const button = new T.Mesh(new T.CylinderGeometry(0.035, 0.035, 0.03, 12), new T.MeshStandardMaterial({ color: 0x4caf50, roughness: 0.4 }));
+  button.rotation.z = Math.PI / 2;
+  button.position.set(0.1, 1.85, 0);
+  g.add(whisk, coil, shaft, grip, button);
+  return g;
+}
+
+/** Electric pump thermo pot: press the button on top for a measured pour of hot water. */
+export function makeThermoPot(): T.Group {
+  const shell = new T.MeshStandardMaterial({ color: 0xf1ece0, roughness: 0.35, envMapIntensity: 0.9 });
+  const grey = new T.MeshStandardMaterial({ color: 0x8d8f93, roughness: 0.3, metalness: 0.4 });
+  const g = new T.Group();
+  const body = new T.Mesh(new T.CylinderGeometry(0.52, 0.56, 1.25, 40), shell);
+  body.position.y = 0.66;
+  const base = new T.Mesh(new T.CylinderGeometry(0.58, 0.6, 0.08, 40), grey);
+  base.position.y = 0.04;
+  const lid = new T.Mesh(new T.SphereGeometry(0.52, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), grey);
+  lid.scale.y = 0.45;
+  lid.position.y = 1.28;
+  const spout = new T.Mesh(new T.BoxGeometry(0.2, 0.12, 0.34), grey);
+  spout.position.set(0, 1.12, 0.6);
+  const button = new T.Mesh(new T.CylinderGeometry(0.13, 0.13, 0.1, 24), new T.MeshStandardMaterial({ color: 0xd8312a, roughness: 0.35 }));
+  button.position.y = 1.55;
+  const window_ = new T.Mesh(new T.PlaneGeometry(0.08, 0.6), new T.MeshStandardMaterial({ color: 0x9ec7d8, roughness: 0.2 }));
+  window_.position.set(0, 0.65, 0.561);
+  g.add(body, base, lid, spout, button, window_);
+  return g;
+}
+
+/** Bowl of fresh lime halves with a hand squeezer beside it. */
+export function makeLimeBowl(): T.Group {
+  const g = new T.Group();
+  const bowl = new T.Mesh(new T.SphereGeometry(0.62, 32, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xdcd8cf, metalness: 0.8, roughness: 0.3, side: T.DoubleSide }));
+  bowl.scale.y = 0.55;
+  bowl.position.y = 0.34;
+  g.add(bowl);
+  const rind = new T.MeshStandardMaterial({ color: 0x5ea12b, roughness: 0.55 });
+  const flesh = new T.MeshStandardMaterial({ color: 0xd9e66a, roughness: 0.4 });
+  [[-0.22, 0.05], [0.2, -0.08], [0, 0.22], [0.05, -0.25]].forEach(([x, z], i) => {
+    const half = new T.Group();
+    const skin = new T.Mesh(new T.SphereGeometry(0.2, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), rind);
+    const face = new T.Mesh(new T.CircleGeometry(0.2, 20), flesh);
+    face.rotation.x = -Math.PI / 2;
+    half.add(skin, face);
+    half.position.set(x, 0.38, z);
+    half.rotation.set(0.5 * (i % 2 ? 1 : -1), i, 0.3);
+    g.add(half);
+  });
+  return g;
+}

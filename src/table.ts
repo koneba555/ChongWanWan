@@ -1,9 +1,10 @@
 import * as T from 'three';
 import { ADD, ADD_IDS, BASE, GARNISH, VESSEL, type AddId, type BaseId, type VesselId } from './data';
-import { makeBottle, makeCan, makeCarryBag, makeCooler, makeGarnish, makeHookRail, makeHotPot, makePlate, makeSodaBottle, makeTableSpoon, makeTin, makeUtensilCup, makeVesselStack } from './models';
+import { makeBottle, makeCan, makeCarryBag, makeCooler, makeFrother, makeGarnish, makeHookRail, makeHotPot, makeLimeBowl, makePlate, makeSodaBottle, makeTableSpoon, makeThermoPot, makeTin, makeUtensilCup, makeVesselStack } from './models';
+import type { UpgradeId } from './shop';
 import { buildShell, CUP_HOME, SERVE_HOME, type DrinkStage } from './stage';
 
-export type ItemKind = 'base' | 'add' | 'garnish' | 'vessel' | 'spoon' | 'glass' | 'cooler' | 'ready';
+export type ItemKind = 'base' | 'add' | 'garnish' | 'vessel' | 'spoon' | 'frother' | 'glass' | 'cooler' | 'ready';
 export type DropTarget = 'cup' | 'serve';
 
 export interface TableItem {
@@ -22,6 +23,8 @@ export interface TableItem {
   actTilt: number;
   actSeconds: number;
   proxy: T.Mesh;
+  /** Acts when pressed instead of being picked up, like the thermo pot's pump. */
+  press?: boolean;
 }
 
 export interface TableRules {
@@ -37,6 +40,8 @@ export interface TableRules {
   deliver(item: TableItem, clientX: number, clientY: number): boolean;
   /** Lets the order card under a carried drink light up. */
   aim(clientX: number, clientY: number): void;
+  /** Runs a pressed item's action. */
+  press(item: TableItem): void;
 }
 
 const SHELF_Y = 0.95;
@@ -96,6 +101,8 @@ export class Table {
   enabled = true;
   private coolerOpen = false;
   private coolerLid: T.Group | null = null;
+  /** For each upgrade, the items it puts out and the ones it replaces. */
+  private readonly upgradeItems: Record<UpgradeId, { on: TableItem[]; off: TableItem[] }> = { frother: { on: [], off: [] }, kettle: { on: [], off: [] }, lime: { on: [], off: [] } };
 
   constructor(
     private readonly stage: DrinkStage,
@@ -186,6 +193,17 @@ export class Table {
     rail.position.set(HANG_SLOTS[1].x, RAIL_Y, HANG_SLOTS[0].z);
     this.stage.tableG.add(plate, rail);
 
+    // Upgrades are set out now and hidden until bought.
+    const frother = this.add('frother', 'frother', 'เครื่องตีฟองนม', makeFrother(), UTENSIL_CUP.x + 0.1, 0.02, UTENSIL_CUP.z + 0.95, 0.6);
+    const kettle = this.add('add', 'hot', 'กระติกน้ำร้อน (กดปุ่ม)', makeThermoPot(), HOT_POT.x, HOT_POT.y, HOT_POT.z, 0.72);
+    kettle.press = true;
+    const lime = this.add('add', 'lemon', 'มะนาวแป้นสด', makeLimeBowl(), -4.45, 0.02, -1.5, 0.75);
+    const find = (kind: ItemKind, key: string, not: TableItem) => this.items.find((i) => i.kind === kind && i.key === key && i !== not) as TableItem;
+    this.upgradeItems.frother.on.push(frother);
+    this.upgradeItems.kettle = { on: [kettle], off: [find('add', 'hot', kettle)] };
+    this.upgradeItems.lime = { on: [lime], off: [find('add', 'lemon', lime)] };
+    this.applyUpgrades(new Set());
+
     // The measuring glass is picked up in place, so it joins the list without being re-parented.
     const cupProxy = new T.Mesh(new T.CylinderGeometry(0.85, 0.75, 1.9, 16), hitMaterial);
     cupProxy.position.y = 0.9;
@@ -209,8 +227,24 @@ export class Table {
     }
   }
 
+  /** Shows what has been bought and puts away what it replaces. */
+  applyUpgrades(owned: Set<UpgradeId>): void {
+    (Object.keys(this.upgradeItems) as UpgradeId[]).forEach((id) => {
+      const has = owned.has(id);
+      this.upgradeItems[id].on.forEach((i) => this.showItem(i, has));
+      this.upgradeItems[id].off.forEach((i) => this.showItem(i, !has));
+    });
+  }
+
+  private showItem(item: TableItem, on: boolean): void {
+    item.state = on ? 'idle' : 'hidden';
+    item.root.visible = on;
+    if (on) item.root.position.copy(item.home);
+  }
+
+  /** The item of this kind and key that is currently out on the table. */
   find(kind: ItemKind, key: string): TableItem | undefined {
-    return this.items.find((i) => i.kind === kind && i.key === key);
+    return this.items.find((i) => i.kind === kind && i.key === key && i.root.visible) ?? this.items.find((i) => i.kind === kind && i.key === key);
   }
 
   /** Puts a hidden item, such as the spoon, back on the table. */
@@ -264,6 +298,11 @@ export class Table {
     if (!item) return;
     if (item.kind === 'cooler') {
       this.setCooler(!this.coolerOpen);
+      return;
+    }
+    if (item.press) {
+      this.rules.press(item);
+      item.hover = 0;
       return;
     }
     this.held = item;
@@ -358,7 +397,7 @@ export class Table {
         if (item.actT >= 1) item.state = 'idle';
       } else {
         // Hanging bags and the cooler stay where they are; they still grow a little under the pointer.
-        const still = item.kind === 'cooler' || item.kind === 'ready';
+        const still = item.kind === 'cooler' || item.kind === 'ready' || item.press === true;
         const lift = still ? 0 : item.hover * (item.kind === 'glass' ? 0.25 : 0.6);
         const bob = isHover && !still ? Math.sin(elapsed * 3) * 0.04 : 0;
         root.position.x += (item.home.x - root.position.x) * near;

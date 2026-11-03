@@ -41,6 +41,31 @@ img { max-width: 100%; }
 .order .recipe { margin-top: 5px; padding-top: 4px; border-top: 1px dashed #ffe3b866; font-size: 12px; line-height: 1.35; color: #ffe9c4; }
 .order.new { animation: arrive .5s ease-out; }
 @keyframes arrive { from { opacity: 0; transform: translateX(-24px); } }
+.order .wait { grid-column: 1 / -1; height: 7px; border-radius: 4px; background: #5c3312; overflow: hidden; }
+.order .wait i { display: block; height: 100%; width: 100%; background: #9be36d; border-radius: 4px; }
+.order .wait.low i { background: #ffcf4a; }
+.order .wait.out i { background: #ff6b5b; }
+.order.empty { opacity: 0.55; grid-template-columns: 1fr; text-align: center; font-size: 13px; font-weight: 300; }
+
+/* End-of-day summary and shop, over the paused table. */
+#day-card { position: absolute; z-index: 6; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100% - 48px)); max-height: calc(100% - 48px); overflow-y: auto; box-sizing: border-box; background: #fbf3df; color: var(--ink); border-radius: 6px; padding: 22px 24px; box-shadow: 0 0 0 100vmax #0007, 0 18px 40px #000a; }
+#day-card h2 { margin: 0; font-family: var(--display); font-size: 40px; line-height: 1.15; color: var(--ticket); text-align: center; }
+#day-card .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 16px; text-align: center; }
+#day-card .stats div { background: #f1e2c2; border-radius: 6px; padding: 8px 4px; font-size: 13px; }
+#day-card .stats b { display: block; font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+#day-card h3 { margin: 4px 0 8px; font-size: 18px; font-weight: 500; }
+#day-card .wallet { float: right; font-size: 15px; font-weight: 500; color: var(--ticket); }
+#day-card .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; }
+#day-card .row .ghost { color: var(--ink); background: transparent; border-color: #2a160855; font-size: 13px; padding: 8px 12px; }
+
+/* Dev mode shortcuts, bottom left, above the day card so they work while the shop is open. */
+#dev-panel { position: absolute; z-index: 10; left: max(16px, env(safe-area-inset-left, 0px)); bottom: 16px; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; }
+#dev-toggle { padding: 6px 14px; font-size: 13px; letter-spacing: 0.06em; border-style: dashed; }
+#dev-tools { display: flex; flex-direction: column; gap: 6px; background: #1a0f08e6; border: 1px dashed #f2c14e88; border-radius: 10px; padding: 10px; }
+#dev-tools button { font: 400 14px var(--body); color: var(--cream); background: #3a2212; border: 1px solid #f2c14e55; border-radius: 6px; padding: 7px 12px; text-align: left; cursor: pointer; }
+#dev-tools button:hover { background: #50311b; }
+#dev-tools button:focus-visible, #dev-toggle:focus-visible { outline: 2px solid var(--gold-pale); outline-offset: 2px; }
+
 #tag { position: absolute; z-index: 4; transform: translate(-50%, -100%); background: #fff5df; color: var(--ink); font-weight: 500; font-size: 15px; padding: 3px 12px; border-radius: 99px; box-shadow: 0 4px 12px #0007; white-space: nowrap; pointer-events: none; }
 
 #hud { position: absolute; z-index: 3; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(620px, calc(100% - 330px)); display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--strip); border: 1px solid #f2c14e44; border-radius: 12px; padding: 7px 16px; text-align: center; pointer-events: none; }
@@ -97,3 +122,102 @@ img { max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .pill, .order { transition: none; animation: none; }
 }
+
+/* Phone shop: a made-up marketplace app on the vendor's phone, over the dimmed cart. */
+#phone { position: absolute; z-index: 9; inset: 0; display: flex; align-items: center; justify-content: center; gap: 20px; background: #0b0604b8; backdrop-filter: blur(3px); animation: phone-dim .2s ease-out; }
+@keyframes phone-dim { from { opacity: 0; } }
+#phone .device { position: relative; width: min(370px, 90vw); height: min(760px, calc(100% - 40px)); box-sizing: border-box; padding: 12px; border-radius: 46px; background: linear-gradient(145deg, #3b3d44, #15161a); box-shadow: inset 0 0 0 2px #5d6068, 0 30px 70px #000c; animation: phone-up .35s cubic-bezier(.2, .9, .3, 1.15); }
+@keyframes phone-up { from { transform: translateY(60px) rotate(-4deg); opacity: 0; } }
+#phone .screen { --app: #ff5a24; --app2: #ff3d6e; --navy: #18227a; position: relative; height: 100%; border-radius: 36px; overflow: hidden; display: flex; flex-direction: column; background: #f3f3f5; color: #222; font-size: 13px; }
+#phone .status { flex: none; display: flex; justify-content: space-between; align-items: center; padding: 10px 24px 4px; font-size: 12px; font-weight: 500; color: #fff; background: var(--app); }
+#phone .notch { width: 90px; height: 22px; border-radius: 12px; background: #111; }
+#phone .sig, #phone .bat { display: inline-block; vertical-align: middle; margin-left: 5px; height: 9px; border-radius: 2px; background: #fff; }
+#phone .sig { width: 13px; clip-path: polygon(0 100%, 100% 0, 100% 100%); }
+#phone .bat { width: 20px; box-shadow: 0 0 0 1px #fff; background: linear-gradient(90deg, #fff 70%, transparent 70%); }
+#phone .app-head { flex: none; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 6px 14px 12px; background: linear-gradient(180deg, var(--app), var(--app2)); color: #fff; }
+#phone .app-logo { display: flex; align-items: center; gap: 6px; font-size: 18px; }
+#phone .app-logo svg { width: 26px; height: 26px; }
+#phone .app-logo b { font-weight: 500; letter-spacing: .02em; }
+#phone .app-wallet { font-size: 12px; font-weight: 500; background: #ffffff2e; border: 1px solid #ffffff66; border-radius: 99px; padding: 3px 10px; font-variant-numeric: tabular-nums; }
+#phone .app-head input { grid-column: 1 / -1; font: 400 13px var(--body); color: #222; border: 0; border-radius: 6px; padding: 8px 12px; background: #fff; }
+#phone .app-head input:focus-visible { outline: 2px solid var(--navy); }
+#phone .app-body { flex: 1; overflow-y: auto; padding: 10px 10px 16px; scrollbar-width: thin; }
+#phone .banner { display: grid; gap: 2px; padding: 14px 16px; margin-bottom: 10px; border-radius: 10px; color: #fff; background: linear-gradient(110deg, var(--navy) 0 58%, #e9327f 58% 76%, #ffb21d 76%); }
+#phone .banner b { font-size: 17px; font-weight: 500; }
+#phone .banner span { font-size: 12px; font-weight: 300; max-width: 62%; }
+#phone .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+#phone .chips button { flex: none; font: 400 12.5px var(--body); color: #444; background: #fff; border: 1px solid #ddd; border-radius: 99px; padding: 5px 12px; cursor: pointer; }
+#phone .chips button.on { color: #fff; background: var(--app); border-color: var(--app); }
+#phone .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#phone .card { display: flex; flex-direction: column; text-align: left; font: inherit; color: inherit; background: #fff; border: 0; border-radius: 6px; padding: 0 0 8px; overflow: hidden; box-shadow: 0 1px 3px #0002; cursor: pointer; transition: transform .12s; }
+#phone button.card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px #0003; }
+#phone .card .pic { position: relative; aspect-ratio: 1; background: #fafafa; border-bottom: 1px solid #eee; }
+#phone .pic svg, #phone .hero svg { width: 100%; height: 100%; display: block; }
+#phone .card .name { padding: 6px 8px 0; font-size: 12.5px; line-height: 1.35; min-height: 2.7em; }
+#phone .tags { display: flex; gap: 4px; padding: 3px 8px; }
+#phone .tags span { font-size: 10px; color: #0a8f7a; border: 1px solid #0a8f7a88; border-radius: 2px; padding: 0 4px; }
+#phone .price { display: flex; justify-content: space-between; align-items: baseline; padding: 0 8px; }
+#phone .price b { color: var(--app); font-size: 15px; font-weight: 500; }
+#phone .price small { font-size: 10.5px; color: #888; }
+#phone .badge.off { position: absolute; top: 0; right: 0; font-size: 11px; font-weight: 500; color: #fff; background: var(--app2); padding: 2px 6px; border-bottom-left-radius: 6px; }
+#phone .stamp { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-12deg); font-weight: 500; font-size: 14px; color: #fff; background: #000a; border: 2px solid #fff; border-radius: 6px; padding: 3px 10px; white-space: nowrap; }
+#phone .card.owned .stamp { background: #0a8f7acc; }
+#phone .card.soon { cursor: default; opacity: .62; }
+#phone .empty { grid-column: 1 / -1; text-align: center; color: #888; padding: 24px 8px; }
+#phone .back { font: 500 14px var(--body); color: var(--navy); background: none; border: 0; padding: 2px 4px 8px; cursor: pointer; }
+#phone .item { background: #fff; border-radius: 8px; padding: 0 14px 16px; overflow: hidden; }
+#phone .hero { aspect-ratio: 1.3; margin: 0 -14px 10px; background: #fafafa; }
+#phone .hero.small { width: 120px; aspect-ratio: 1; margin: 8px auto 14px; border-radius: 8px; }
+#phone .sale { display: flex; align-items: baseline; gap: 8px; }
+#phone .sale b { font-size: 24px; font-weight: 500; color: var(--app); }
+#phone .sale s { color: #999; font-size: 13px; }
+#phone .sale .badge.off { position: static; border-radius: 3px; }
+#phone .item h3 { margin: 4px 0; font-size: 16px; font-weight: 500; }
+#phone .meta { font-size: 12px; color: #666; }
+#phone .stars { color: #ffb21d; letter-spacing: 1px; }
+#phone .ship { margin: 10px 0; padding: 8px 10px; font-size: 12px; color: #0a8f7a; background: #e6f6f2; border-radius: 6px; }
+#phone .seller { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-block: 1px solid #eee; }
+#phone .seller i { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; font-style: normal; font-weight: 500; color: #fff; background: var(--navy); }
+#phone .seller b { display: block; font-weight: 500; }
+#phone .seller small { font-size: 11px; color: #888; }
+#phone .item h4 { margin: 12px 0 2px; font-size: 14px; font-weight: 500; }
+#phone .item p { margin: 0; font-weight: 300; line-height: 1.5; }
+#phone .buy-bar { position: sticky; bottom: -16px; margin: 10px -10px -16px; padding: 10px; background: #fff; box-shadow: 0 -2px 8px #0001; }
+#phone .buy { width: 100%; font: 500 15px var(--body); color: #fff; background: linear-gradient(90deg, var(--app), var(--app2)); border: 0; border-radius: 6px; padding: 11px; cursor: pointer; }
+#phone .buy:disabled { background: #c9c9cc; cursor: default; }
+#phone .sheet { position: absolute; inset: 0; z-index: 2; display: flex; align-items: flex-end; background: #0007; animation: phone-dim .15s; }
+#phone .sheet-card { width: 100%; background: #fff; border-radius: 16px 16px 0 0; padding: 16px 16px 40px; animation: sheet-up .2s ease-out; }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+#phone .sheet-card h4 { margin: 0 0 10px; font-size: 16px; font-weight: 500; }
+#phone .line { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dashed #eee; }
+#phone .line b { font-weight: 500; white-space: nowrap; }
+#phone .line s { color: #999; font-weight: 300; }
+#phone .sheet-row { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 14px; }
+#phone .ghosty { font: 400 14px var(--body); color: #444; background: #fff; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; }
+#phone .done { text-align: center; background: #fff; border-radius: 8px; padding: 26px 16px 18px; }
+#phone .tick { display: grid; place-items: center; width: 60px; height: 60px; margin: 0 auto 8px; border-radius: 50%; font-size: 32px; color: #fff; background: #0a8f7a; animation: phone-up .4s; }
+#phone .done h3 { margin: 0 0 4px; font-size: 18px; font-weight: 500; }
+#phone .done p { margin: 0; font-weight: 300; line-height: 1.5; }
+#phone .section { margin: 4px 4px 10px; font-size: 16px; font-weight: 500; }
+#phone .order-row { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; background: #fff; border-radius: 6px; padding: 8px; margin-bottom: 6px; }
+#phone .order-row .pic { background: #fafafa; border-radius: 4px; }
+#phone .order-row b { font-weight: 500; }
+#phone .order-row small { display: block; font-size: 11px; color: #888; }
+#phone .ok { font-size: 11px; color: #0a8f7a; }
+#phone .app-tabs { flex: none; display: grid; grid-template-columns: 1fr 1fr; padding: 4px 0 22px; background: #fff; border-top: 1px solid #e6e6e6; }
+#phone .app-tabs button { display: grid; justify-items: center; gap: 1px; font: 400 11px var(--body); color: #777; background: none; border: 0; padding: 4px; cursor: pointer; }
+#phone .app-tabs svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+#phone .app-tabs button.on { color: var(--app); }
+#phone .home-bar { position: absolute; z-index: 3; left: 50%; bottom: 18px; transform: translateX(-50%); width: 120px; height: 5px; padding: 0; border: 0; border-radius: 3px; background: #222; cursor: pointer; }
+#phone button:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+#phone .phone-close { align-self: flex-end; margin-bottom: 30px; font: 400 14px var(--body); color: var(--cream); background: #1a0f08d9; border: 1px solid #fff5df66; border-radius: 99px; padding: 8px 14px; cursor: pointer; }
+#phone .phone-close kbd { font: inherit; font-size: 11px; opacity: .7; border: 1px solid #fff5df55; border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+#phone .phone-close:focus-visible { outline: 2px solid var(--gold-pale); }
+
+/* The day card's way into the phone shop. */
+.phone-cta { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; font: inherit; color: #fff; background: linear-gradient(100deg, #ff5a24, #ff3d6e); border: 0; border-radius: 10px; padding: 12px 16px; cursor: pointer; box-shadow: 0 6px 16px #ff5a2455; transition: transform .12s; }
+.phone-cta:hover { transform: translateY(-2px); }
+.phone-cta:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.phone-cta svg { flex: none; width: 34px; height: 34px; }
+.phone-cta b { display: block; font-size: 17px; font-weight: 500; }
+.phone-cta small { font-size: 12.5px; font-weight: 300; }

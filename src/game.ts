@@ -24,6 +24,8 @@ import {
   type Order,
   type VesselId,
 } from './data';
+import { Phone } from './phone';
+import { UPGRADES, clearSave, loadSave, writeSave, type UpgradeId } from './shop';
 import { CUP_HOME, SERVE_HOME, type DrinkStage } from './stage';
 import { HANG_SLOTS, Table, type DropTarget, type TableItem, type TableRules } from './table';
 
@@ -32,6 +34,23 @@ const RING_LENGTH = 138.2;
 const KEY_STIR_SPEED = 9.4; // radians per second, about 1.5 turns
 const WAITING = 3;
 const RESULT_SECONDS = 4.5;
+/** Customers who come to the cart in one day. */
+const DAY_CUSTOMERS = 8;
+/** Seconds a customer waits on day 1; each later day they are a little less patient. */
+const PATIENCE_START = 150;
+const PATIENCE_DROP_PER_DAY = 6;
+const PATIENCE_MIN = 90;
+/** Tip for a good drink handed over while the customer still has more than half their patience. */
+const QUICK_TIP = 10;
+const QUICK_TIP_SHARE = 0.5;
+const LIME_TIP = 5;
+const FROTHER_SECONDS = 3;
+
+interface Customer {
+  order: Order;
+  patience: number;
+  total: number;
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: { id?: string; className?: string; text?: string } = {}) {
   const e = document.createElement(tag);
@@ -45,7 +64,7 @@ function avatarSvg(o: Order): string {
   return `<svg viewBox="0 0 46 46" width="100%" height="100%"><rect width="46" height="46" fill="#ffeecb"/><path d="M6 46c1-11 8-15 17-15s16 4 17 15z" fill="${o.top}"/><circle cx="23" cy="21" r="11" fill="${o.skin}"/><path d="M11 21c-1-10 6-15 12-15s13 5 12 15c-3-6-8-8-12-8s-9 2-12 8z" fill="${o.hair}"/><circle cx="19" cy="22" r="1.4" fill="#231a14"/><circle cx="27" cy="22" r="1.4" fill="#231a14"/><path d="M19.5 26.5q3.5 3 7 0" stroke="#7a3b22" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>`;
 }
 
-/** Short description of a finished drink, for its name tag on the tray. */
+/** Short description of a finished drink, for its name tag on the hook. */
 function describe(d: Drink): string {
   const parts = [d.base ? BASE[d.base].n : 'ไม่มีน้ำฐาน', ...ADD_IDS.filter((k) => d.milk[k]).map((k) => ADD[k] + (d.milk[k] > 1 ? ` ×${d.milk[k]}` : ''))];
   return `${parts.join(' + ')}${d.garnish === 'straw' ? ' · มีหลอด' : ''}`;
@@ -63,17 +82,26 @@ export function startGame(stage: DrinkStage): void {
   const resetBtn = $<HTMLButtonElement>('#reset');
   const spoonBtn = $<HTMLButtonElement>('#spoon-done');
   const resultCard = $('#result-card');
+  const dayCard = $('#day-card');
+
+  const saved = loadSave();
+  let day = saved.day;
+  let money = saved.money;
+  const owned = new Set<UpgradeId>(saved.owned);
 
   let drink = blankDrink();
-  let money = 0;
-  let servedCount = 0;
-  /** Customers waiting at the cart; each card shows one. */
-  const waiting: Order[] = [];
+  /** Customers at the cart, by card slot; null once a slot has no one left to come. */
+  const waiting: (Customer | null)[] = [];
   /** Finished drinks hanging on the hooks, by slot. */
   const tray: ({ drink: Drink; item: TableItem } | null)[] = HANG_SLOTS.map(() => null);
   let resultTimer = 0;
+  let dayOpen = false;
+  let arrived = 0;
+  const today = { done: 0, served: 0, walked: 0, earned: 0, tips: 0 };
 
   let stirring = false;
+  /** Seconds left on the frother's run; it stirs by itself while above zero. */
+  let frotherLeft = 0;
   let stirTime = 0;
   let turnRate = 0;
   let spoonAngle = 0;
@@ -87,6 +115,23 @@ export function startGame(stage: DrinkStage): void {
     hint.textContent = text;
   };
   const trayCount = () => tray.filter(Boolean).length;
+  const persist = () => writeSave({ day, money, owned: [...owned] });
+  const showMoney = () => ($('#money-n').textContent = String(money));
+
+  // Upgrades are bought on the phone shop app, opened from the end-of-day card.
+  const phone = new Phone({
+    money: () => money,
+    owned: () => owned,
+    buy(id) {
+      const u = UPGRADES.find((x) => x.id === id);
+      if (!u || owned.has(id) || money < u.price) return;
+      money -= u.price;
+      owned.add(id);
+      table.applyUpgrades(owned);
+      persist();
+      showMoney();
+    },
+  });
 
   /** Keeps each done button just in front of the glass it belongs to. */
   function pinButton(button: HTMLElement, at: T.Vector3): void {
@@ -97,6 +142,7 @@ export function startGame(stage: DrinkStage): void {
   }
 
   function nextHint(): string {
+    if (frotherLeft > 0) return 'เครื่องตีฟองนมกำลังคนให้';
     if (stirring) return drink.mix >= 1 ? 'เข้ากันดีแล้ว กดปุ่มใต้แก้วเพื่อวางช้อน' : 'หมุนเมาส์เป็นวงรอบแก้วตวง ยิ่งหมุนเร็ว ยิ่งเสร็จไว หรือกดปุ่ม S ค้างไว้';
     if (!drink.poured) {
       if (!drink.base) {
@@ -104,8 +150,14 @@ export function startGame(stage: DrinkStage): void {
           ? 'ลากถุงที่แขวนรอส่งมุมขวาบนไปวางบนตั๋วของลูกค้าที่สั่ง หรือเริ่มชงแก้วใหม่'
           : 'เลือกออเดอร์ทางซ้าย แล้วลากน้ำฐานมาใส่แก้วตวง';
       }
-      if (BREWED.includes(drink.base) && !drink.milk.hot) return 'ชา กาแฟ ต้องชงกับน้ำร้อน ลากกาน้ำร้อนด้านซ้ายมาเทลงแก้วตวง';
-      if (drink.mix < 1) return 'เติมส่วนผสมตามสูตร แล้วลากช้อนข้างนมข้นมาใส่แก้วตวงเพื่อคน';
+      if (BREWED.includes(drink.base) && !drink.milk.hot) {
+        return owned.has('kettle') ? 'ชา กาแฟ ต้องชงกับน้ำร้อน กดที่กระติกน้ำร้อนด้านซ้าย' : 'ชา กาแฟ ต้องชงกับน้ำร้อน ลากกาน้ำร้อนด้านซ้ายมาเทลงแก้วตวง';
+      }
+      if (drink.mix < 1) {
+        return owned.has('frother')
+          ? 'เติมส่วนผสมตามสูตร แล้วลากเครื่องตีฟองนมหรือช้อนมาใส่แก้วตวงเพื่อคน'
+          : 'เติมส่วนผสมตามสูตร แล้วลากช้อนข้างนมข้นมาใส่แก้วตวงเพื่อคน';
+      }
       if (!drink.vessel) return 'กดที่ถังแช่สีแดงมุมขวาเพื่อเปิดฝา แล้วลากแก้วหรือถุงหิ้วมาวางข้างแก้วตวง';
       return 'ลากแก้วตวงไปเทลงภาชนะ';
     }
@@ -130,8 +182,11 @@ export function startGame(stage: DrinkStage): void {
     if (!stirring) say(nextHint());
     finishBtn.hidden = !drink.poured || stage.pouring;
     resetBtn.hidden = !parts.length && !drink.vessel && drink.garnish === 'none';
-    spoonBtn.hidden = !stirring;
+    spoonBtn.hidden = !stirring || frotherLeft > 0;
     stirBox.hidden = !stirring;
+    $('#day').textContent = String(day);
+    $('#order-no').textContent = String(today.done);
+    $('#day-total').textContent = String(DAY_CUSTOMERS);
   }
 
   function updateStirUI(): void {
@@ -142,14 +197,19 @@ export function startGame(stage: DrinkStage): void {
     say(nextHint());
   }
 
+  /** Takes the spoon or frother out of the glass and puts it back where it lives. */
   function stopStirring(): void {
     if (!stirring) return;
     stirring = false;
+    frotherLeft = 0;
     turnRate = 0;
     stage.setSpoon(false);
+    stage.setFrother(false);
     table.enabled = true;
-    const spoon = table.find('spoon', 'spoon');
-    if (spoon) table.sendHome(spoon);
+    ['spoon', 'frother'].forEach((k) => {
+      const tool = table.find(k as 'spoon' | 'frother', k);
+      if (tool && tool.state === 'hidden' && (k === 'spoon' || owned.has('frother'))) table.sendHome(tool);
+    });
     updateHud();
   }
 
@@ -159,15 +219,33 @@ export function startGame(stage: DrinkStage): void {
   /** The order card under a screen point, if any. */
   function cardAt(clientX: number, clientY: number): HTMLElement | null {
     for (const e of document.elementsFromPoint(clientX, clientY)) {
-      const card = (e as HTMLElement).closest<HTMLElement>('.order');
+      const card = (e as HTMLElement).closest<HTMLElement>('.order:not(.empty)');
       if (card) return card;
     }
     return null;
   }
 
+  /** Pours one measure of an addition into the measuring glass. False when the glass can't take it. */
+  function addToGlass(k: AddId): boolean {
+    if (drink.poured) {
+      say('เทลงภาชนะไปแล้ว ถ้าจะเติมต้องกดเทใหม่');
+      return false;
+    }
+    if (drink.milk[k] >= MAX_PER_ADDITION) {
+      say(`ใส่${ADD[k]}ครบ ${MAX_PER_ADDITION} ส่วนแล้ว`);
+      return false;
+    }
+    drink.milk[k]++;
+    drink.mix *= 0.4;
+    stage.pour(k === 'hot' || k === 'soda' ? '#e6f3f6' : k === 'syrup' ? '#f3e2b0' : k === 'lemon' ? '#efe48a' : '#f8e7cc');
+    stage.applyDrink(drink, false);
+    updateHud();
+    return true;
+  }
+
   const rules: TableRules = {
     canPick(item) {
-      if (stage.pouring) return false;
+      if (stage.pouring || !dayOpen) return false;
       if (item.kind === 'glass') return !drink.poured;
       return true;
     },
@@ -176,6 +254,7 @@ export function startGame(stage: DrinkStage): void {
         case 'base':
         case 'add':
         case 'spoon':
+        case 'frother':
           return drink.poured ? [] : ['cup'];
         case 'glass':
           return drink.vessel ? ['serve'] : [];
@@ -197,20 +276,18 @@ export function startGame(stage: DrinkStage): void {
         if (!BREWED.includes(drink.base)) stage.pour(BASE[drink.base].stream);
         act = { pos: aboveCup(3), tilt: -1.15, seconds: 0.9 };
       } else if (item.kind === 'add') {
-        const k = item.key as AddId;
-        if (drink.milk[k] >= MAX_PER_ADDITION) {
-          say(`ใส่${ADD[k]}ครบ ${MAX_PER_ADDITION} ส่วนแล้ว`);
-          return null;
-        }
-        drink.milk[k]++;
-        drink.mix *= 0.4;
-        stage.pour(k === 'hot' || k === 'soda' ? '#e6f3f6' : k === 'syrup' ? '#f3e2b0' : k === 'lemon' ? '#efe48a' : '#f8e7cc');
-        act = { pos: aboveCup(3), tilt: -1.15, seconds: 0.9 };
-      } else if (item.kind === 'spoon') {
+        if (!addToGlass(item.key as AddId)) return null;
+        return { pos: aboveCup(3), tilt: item.key === 'lemon' && owned.has('lime') ? 0 : -1.15, seconds: 0.9 };
+      } else if (item.kind === 'spoon' || item.kind === 'frother') {
         stirring = true;
         table.enabled = false;
         lastPointerAngle = null;
-        stage.setSpoon(true);
+        if (item.kind === 'frother') {
+          frotherLeft = FROTHER_SECONDS;
+          stage.setFrother(true);
+        } else {
+          stage.setSpoon(true);
+        }
         act = { pos: new T.Vector3(), tilt: 0, seconds: 0, hide: true };
       } else if (item.kind === 'vessel') {
         drink.vessel = item.key as VesselId;
@@ -233,6 +310,11 @@ export function startGame(stage: DrinkStage): void {
       updateHud();
       return act;
     },
+    press(item) {
+      // Only the thermo pot acts on a press: a pump of hot water into the measuring glass.
+      if (!dayOpen || stage.pouring || item.key !== 'hot') return;
+      addToGlass('hot');
+    },
     tagExtra(item) {
       if (item.kind === 'add' && drink.milk[item.key as AddId]) return `×${drink.milk[item.key as AddId]}`;
       if (item.kind === 'ready') {
@@ -249,7 +331,7 @@ export function startGame(stage: DrinkStage): void {
       const card = cardAt(clientX, clientY);
       const slot = Number(item.key);
       const entry = tray[slot];
-      if (!card || !entry) {
+      if (!card || !entry || !dayOpen) {
         say('วางถุงบนตั๋วของลูกค้าที่สั่ง เพื่อส่งให้ลูกค้า');
         return false;
       }
@@ -262,10 +344,12 @@ export function startGame(stage: DrinkStage): void {
   };
 
   const table = new Table(stage, stageEl, canvas, $('#tag'), rules);
+  table.applyUpgrades(owned);
 
   /** Picks a customer who isn't already waiting, when there are enough to choose from. */
   function newOrder(): Order {
-    const free = ORDERS.filter((o) => !waiting.includes(o));
+    const here = waiting.filter((c): c is Customer => c !== null).map((c) => c.order);
+    const free = ORDERS.filter((o) => !here.includes(o));
     const pool = free.length ? free : ORDERS;
     return pool[Math.floor(Math.random() * pool.length)];
   }
@@ -276,9 +360,24 @@ export function startGame(stage: DrinkStage): void {
     if (!thumbs.has(o)) thumbs.set(o, stage.snapOrder(o, drink));
   }
 
+  /** The next customer of the day walks up, or null once everyone has come. */
+  function arrive(first?: Order): Customer | null {
+    if (arrived >= DAY_CUSTOMERS) return null;
+    arrived++;
+    const order = first ?? newOrder();
+    thumbFor(order);
+    const total = Math.max(PATIENCE_MIN, PATIENCE_START - (day - 1) * PATIENCE_DROP_PER_DAY);
+    return { order, patience: total, total };
+  }
+
   function renderOrders(fresh = -1): void {
     ordersEl.textContent = '';
-    waiting.forEach((o, i) => {
+    waiting.forEach((c, i) => {
+      if (!c) {
+        ordersEl.append(el('article', { className: 'order empty', text: 'ไม่มีลูกค้ารอ' }));
+        return;
+      }
+      const o = c.order;
       const card = el('article', { className: `order${i === fresh ? ' new' : ''}` });
       card.dataset.slot = String(i);
       const img = el('img');
@@ -290,36 +389,75 @@ export function startGame(stage: DrinkStage): void {
       face.innerHTML = avatarSvg(o);
       who.append(face, el('span', { text: `${o.who}: ${o.quote}` }));
       text.append(el('div', { className: 'name', text: `${o.name} · ${VESSEL_ASK[o.vessel]}` }), who, el('div', { className: 'recipe', text: `สูตร: ${recipeOf(o)}` }));
-      card.append(img, text);
+      const wait = el('div', { className: 'wait' });
+      wait.setAttribute('role', 'progressbar');
+      wait.setAttribute('aria-label', `เวลารอของ${o.who}`);
+      wait.append(el('i'));
+      card.append(img, text, wait);
       ordersEl.append(card);
+    });
+    updatePatienceBars();
+  }
+
+  function updatePatienceBars(): void {
+    ordersEl.querySelectorAll<HTMLElement>('.order[data-slot]').forEach((card) => {
+      const c = waiting[Number(card.dataset.slot)];
+      const bar = card.querySelector<HTMLElement>('.wait');
+      if (!c || !bar) return;
+      const share = Math.max(0, c.patience / c.total);
+      (bar.firstElementChild as HTMLElement).style.width = `${share * 100}%`;
+      bar.classList.toggle('low', share <= QUICK_TIP_SHARE && share > 0.2);
+      bar.classList.toggle('out', share <= 0.2);
     });
   }
 
-  function showResult(o: Order, r: ReturnType<typeof score>): void {
+  function showResult(title: string, line: string, rows: { label: string; got: number; max: number }[]): void {
     resultCard.textContent = '';
     const list = el('ul', { id: 'breakdown' });
-    r.rows.forEach((row) => {
+    rows.forEach((row) => {
       const li = el('li');
       li.append(el('span', { text: row.label }), el('b', { text: `${row.got}/${row.max}` }));
       list.append(li);
     });
-    resultCard.append(el('div', { id: 'verdict', text: r.verdict }), el('div', { id: 'earn', text: `${o.who} · ${r.pay ? `+${r.pay} บาท` : 'ไม่ได้เงิน'}` }), list);
+    resultCard.append(el('div', { id: 'verdict', text: title }), el('div', { id: 'earn', text: line }), list);
     resultCard.hidden = false;
     clearTimeout(resultTimer);
     resultTimer = window.setTimeout(() => (resultCard.hidden = true), RESULT_SECONDS * 1000);
   }
 
-  function handOver(orderSlot: number, given: Drink): void {
-    const o = waiting[orderSlot];
-    const r = score(given, o);
-    money += r.pay;
-    servedCount++;
-    $('#money-n').textContent = String(money);
-    $('#order-no').textContent = String(servedCount);
-    showResult(o, r);
-    waiting[orderSlot] = newOrder();
-    thumbFor(waiting[orderSlot]);
-    renderOrders(orderSlot);
+  /** A customer is finished with, served or not; their slot goes to the next arrival. */
+  function customerDone(slot: number): void {
+    today.done++;
+    waiting[slot] = arrive();
+    renderOrders(slot);
+    updateHud();
+    if (today.done >= DAY_CUSTOMERS) endDay();
+  }
+
+  function handOver(slot: number, given: Drink): void {
+    const c = waiting[slot];
+    if (!c) return;
+    const r = score(given, c.order);
+    const quick = r.total >= 70 && c.patience / c.total > QUICK_TIP_SHARE ? QUICK_TIP : 0;
+    const lime = owned.has('lime') && c.order.milk.lemon > 0 && given.milk.lemon === c.order.milk.lemon ? LIME_TIP : 0;
+    const tip = r.pay ? quick + lime : 0;
+    money += r.pay + tip;
+    today.served++;
+    today.earned += r.pay;
+    today.tips += tip;
+    showMoney();
+    persist();
+    const tipText = tip ? ` · ทิป ${tip}` : '';
+    showResult(r.verdict, `${c.order.who} · ${r.pay ? `+${r.pay} บาท${tipText}` : 'ไม่ได้เงิน'}`, r.rows);
+    customerDone(slot);
+  }
+
+  function walkOut(slot: number): void {
+    const c = waiting[slot];
+    if (!c) return;
+    today.walked++;
+    showResult('รอนานเกินไป', `${c.order.who} เดินออกไปแล้ว`, []);
+    customerDone(slot);
   }
 
   function clearDrink(): void {
@@ -348,6 +486,85 @@ export function startGame(stage: DrinkStage): void {
     clearDrink();
   }
 
+  function startDay(): void {
+    today.done = today.served = today.walked = today.earned = today.tips = 0;
+    arrived = 0;
+    waiting.length = 0;
+    // Day one always opens with the Thai iced tea, which the hints walk through.
+    waiting.push(arrive(day === 1 ? ORDERS[0] : undefined));
+    while (waiting.length < WAITING) waiting.push(arrive());
+    tray.forEach((entry, i) => {
+      if (entry) table.removeItem(entry.item);
+      tray[i] = null;
+    });
+    clearDrink();
+    dayOpen = true;
+    dayCard.hidden = true;
+    renderOrders();
+    updateHud();
+  }
+
+  function endDay(): void {
+    dayOpen = false;
+    resultCard.hidden = true;
+    table.setCooler(false);
+    day++;
+    persist();
+    renderDayCard(day - 1);
+  }
+
+  /** Summary of the day just closed, and the shop. */
+  function renderDayCard(closed: number): void {
+    dayCard.textContent = '';
+    dayCard.append(el('h2', { text: `ปิดร้าน วันที่ ${closed}` }));
+    const stats = el('div', { className: 'stats' });
+    ([['เสิร์ฟ', `${today.served}`], ['เดินหนี', `${today.walked}`], ['รายได้', `${today.earned}`], ['ทิป', `${today.tips}`]] as const).forEach(([label, value]) => {
+      const box = el('div');
+      box.append(el('b', { text: value }), el('span', { text: label }));
+      stats.append(box);
+    });
+    const heading = el('h3', { text: 'อัปเกรดร้าน' });
+    heading.append(el('span', { className: 'wallet', text: `เงินในร้าน ${money} บาท` }));
+    const left = UPGRADES.filter((u) => !owned.has(u.id));
+    const affordable = left.filter((u) => u.price <= money).length;
+    const shop = el('button', { className: 'phone-cta' });
+    shop.type = 'button';
+    shop.innerHTML = '<svg viewBox="0 0 34 34" aria-hidden="true"><rect x="9" y="2" width="16" height="30" rx="4" fill="#fff"/><rect x="11" y="6" width="12" height="20" rx="1" fill="#ff5a24"/><circle cx="17" cy="29" r="1.3" fill="#ff5a24"/></svg>';
+    const words = el('span');
+    words.append(
+      el('b', { text: 'เปิดแอปช้อปเหมียว' }),
+      el('small', { text: left.length ? `ซื้อของเข้าร้าน · มีของที่เงินพอซื้อ ${affordable} ชิ้น` : 'ซื้ออัปเกรดที่มีขายครบแล้ว รอของใหม่เข้า' }),
+    );
+    shop.append(words);
+    shop.addEventListener('click', () => phone.open(() => renderDayCard(closed)));
+    dayCard.append(stats, heading, shop);
+    const actions = el('div', { className: 'row' });
+    const restart = el('button', { className: 'ghost', text: 'เริ่มเกมใหม่ทั้งหมด' });
+    restart.type = 'button';
+    restart.addEventListener('click', () => {
+      // A second press confirms, since this throws away money and upgrades.
+      if (restart.dataset.armed !== '1') {
+        restart.dataset.armed = '1';
+        restart.textContent = 'กดอีกครั้งเพื่อล้างเงินและอัปเกรด';
+        return;
+      }
+      const s = clearSave();
+      day = s.day;
+      money = s.money;
+      owned.clear();
+      table.applyUpgrades(owned);
+      showMoney();
+      startDay();
+    });
+    const open = el('button', { className: 'pill', text: `เปิดร้าน วันที่ ${day}` });
+    open.type = 'button';
+    open.addEventListener('click', startDay);
+    actions.append(restart, open);
+    dayCard.append(actions);
+    dayCard.hidden = false;
+    open.focus();
+  }
+
   function stirFrame(dt: number): void {
     if (!stirring) {
       pendingAngle = 0;
@@ -356,6 +573,21 @@ export function startGame(stage: DrinkStage): void {
     let raw = pendingAngle / Math.max(dt, 0.001);
     spoonAngle += pendingAngle;
     pendingAngle = 0;
+    if (frotherLeft > 0) {
+      // The frother whirls on its own and finishes the mix in a fixed time.
+      frotherLeft -= dt;
+      raw = 0;
+      spoonAngle += 30 * dt;
+      if (stage.hasCupLiquid) {
+        stirTime += dt;
+        drink.mix = Math.min(1, drink.mix + dt / FROTHER_SECONDS);
+        if (Math.abs(drink.mix - stage.paintedMix) > 0.025 || drink.mix === 1) stage.paintLiquid(drink);
+      }
+      stage.setStirAngle(spoonAngle);
+      updateStirUI();
+      if (frotherLeft <= 0 || drink.mix >= 1) stopStirring();
+      return;
+    }
     if (keyStir) {
       raw = KEY_STIR_SPEED;
       spoonAngle += raw * dt;
@@ -372,11 +604,21 @@ export function startGame(stage: DrinkStage): void {
     updateStirUI();
   }
 
+  function patienceFrame(dt: number): void {
+    if (!dayOpen) return;
+    waiting.forEach((c, i) => {
+      if (!c) return;
+      c.patience -= dt;
+      if (c.patience <= 0) walkOut(i);
+    });
+    updatePatienceBars();
+  }
+
   stageEl.addEventListener('pointermove', (e) => {
     const r = stageEl.getBoundingClientRect();
     mouseX = (e.clientX - r.left) / r.width - 0.5;
     mouseY = (e.clientY - r.top) / r.height - 0.5;
-    if (!stirring) {
+    if (!stirring || frotherLeft > 0) {
       lastPointerAngle = null;
       return;
     }
@@ -415,14 +657,48 @@ export function startGame(stage: DrinkStage): void {
   resultCard.addEventListener('click', () => (resultCard.hidden = true));
 
   drawGarland(garland);
-  // The first customer always wants the Thai iced tea; the rest arrive at random.
-  waiting.push(ORDERS[0]);
-  while (waiting.length < WAITING) waiting.push(newOrder());
-  waiting.forEach(thumbFor);
-  renderOrders();
+  showMoney();
   stage.layout();
-  stage.applyDrink(drink, true);
-  updateHud();
+  startDay();
+
+  // Dev mode: shortcuts for checking the summary, the shop and walk-outs without playing a whole day.
+  // It shows on the dev server, or on the live site when the address ends in ?dev.
+  if (import.meta.env.DEV || new URLSearchParams(location.search).has('dev')) {
+    const panel = $('#dev-panel');
+    const tools = $('#dev-tools');
+    $('#dev-toggle').addEventListener('click', () => {
+      tools.hidden = !tools.hidden;
+      $('#dev-toggle').setAttribute('aria-expanded', String(!tools.hidden));
+    });
+    const actions: Record<string, () => void> = {
+      'dev-end-day': () => {
+        if (dayOpen) endDay();
+      },
+      'dev-money': () => {
+        money += 500;
+        showMoney();
+        persist();
+        // Refresh the shop so newly affordable upgrades can be bought.
+        if (!dayCard.hidden && !phone.isOpen) renderDayCard(day - 1);
+        phone.refresh();
+      },
+      'dev-rush': () => {
+        waiting.forEach((c) => c && (c.patience = Math.min(c.patience, 5)));
+      },
+      'dev-reset': () => {
+        phone.close();
+        const s = clearSave();
+        day = s.day;
+        money = s.money;
+        owned.clear();
+        table.applyUpgrades(owned);
+        showMoney();
+        startDay();
+      },
+    };
+    Object.entries(actions).forEach(([id, run]) => $(`#${id}`).addEventListener('click', run));
+    panel.hidden = false;
+  }
 
   let last = performance.now();
   let elapsed = 0;
@@ -431,6 +707,7 @@ export function startGame(stage: DrinkStage): void {
     last = now;
     elapsed += dt;
     stirFrame(dt);
+    patienceFrame(dt);
     table.update(dt, elapsed);
     pinButton(finishBtn, SERVE_HOME);
     pinButton(spoonBtn, CUP_HOME);
