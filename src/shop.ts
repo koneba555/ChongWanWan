@@ -1,11 +1,12 @@
-export type UpgradeId = 'frother' | 'kettle' | 'lime';
+export type UpgradeId = 'frother' | 'kettle' | 'lime' | 'cocoa' | 'matcha' | 'pearl' | 'hook';
 
-export type Category = 'machine' | 'fresh' | 'topping' | 'pack';
+export type Category = 'machine' | 'fresh' | 'topping' | 'tools' | 'pack';
 
 export const CATEGORIES: { id: Category; name: string }[] = [
   { id: 'machine', name: 'เครื่องใช้ไฟฟ้า' },
-  { id: 'fresh', name: 'วัตถุดิบสด' },
+  { id: 'fresh', name: 'วัตถุดิบ' },
   { id: 'topping', name: 'ท็อปปิ้ง' },
+  { id: 'tools', name: 'อุปกรณ์ร้าน' },
   { id: 'pack', name: 'แพ็กเกจจิ้ง' },
 ];
 
@@ -32,7 +33,6 @@ export interface ComingSoon {
 
 export const COMING_SOON: ComingSoon[] = [
   { key: 'whip', name: 'วิปครีมกระป๋อง', category: 'topping', price: 250 },
-  { key: 'pearl', name: 'ไข่มุกบุก', category: 'topping', price: 180 },
   { key: 'sealer', name: 'เครื่องซีลฝาแก้ว', category: 'pack', price: 650 },
   { key: 'espresso', name: 'เครื่องชงเอสเพรสโซ', category: 'machine', price: 1500 },
 ];
@@ -41,6 +41,10 @@ export const UPGRADES: Upgrade[] = [
   { id: 'frother', name: 'เครื่องตีฟองนมไฟฟ้า', price: 300, effect: 'ลากลงแก้วตวงแล้วคนให้เองใน 3 วินาที ไม่ต้องหมุนเมาส์', category: 'machine', was: 459, sold: 12400, stars: 4.8, seller: 'บ้านกาแฟแมวส้ม' },
   { id: 'kettle', name: 'กระติกน้ำร้อนไฟฟ้าแบบกด', price: 400, effect: 'กดทีเดียวได้น้ำร้อน 100 ml ลงแก้วตวง ไม่ต้องยกกา', category: 'machine', was: 690, sold: 8300, stars: 4.9, seller: 'เครื่องครัวเหมียวมาร์ท' },
   { id: 'lime', name: 'มะนาวแป้นสด 1 กก.', price: 200, effect: 'ใช้มะนาวคั้นสดแทนน้ำมะนาวขวด ลูกค้าให้ทิปเพิ่ม 5 บาทเมื่อสูตรมีมะนาว', category: 'fresh', was: 260, sold: 31200, stars: 4.7, seller: 'สวนป้าแมว ราชบุรี' },
+  { id: 'cocoa', name: 'ผงโกโก้เข้มข้น', price: 350, effect: 'วางกระป๋องโกโก้บนชั้น ปลดล็อกเมนูโกโก้ ขายแก้วละ 55 บาท', category: 'fresh', was: 420, sold: 9800, stars: 4.8, seller: 'โรงคั่วโกโก้ชุมพรเหมียว' },
+  { id: 'matcha', name: 'ผงมัทฉะแท้', price: 450, effect: 'วางกระป๋องมัทฉะบนชั้น ปลดล็อกเมนูมัทฉะ ขายแก้วละ 55 บาท', category: 'fresh', was: 590, sold: 6100, stars: 4.9, seller: 'ไร่ชาดอยเหมียว' },
+  { id: 'pearl', name: 'ไข่มุกบุก พร้อมชามและกระบวย', price: 500, effect: 'ลากชามไข่มุกไปตักใส่ภาชนะก่อนเท ปลดล็อกเมนูไข่มุก ได้เพิ่มแก้วละ 10 บาท', category: 'topping', was: 650, sold: 22000, stars: 4.7, seller: 'ท็อปปิ้งแมวอ้วน' },
+  { id: 'hook', name: 'ตะขอตัว S เพิ่ม 1 ช่อง', price: 250, effect: 'แขวนน้ำรอส่งได้ 4 ถุง ชงล่วงหน้าได้มากขึ้นตอนลูกค้ามาพร้อมกัน', category: 'tools', was: 320, sold: 4500, stars: 4.6, seller: 'เหล็กดัดเหมียวการช่าง' },
 ];
 
 export interface Save {

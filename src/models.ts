@@ -647,3 +647,32 @@ export function makeLimeBowl(): T.Group {
   });
   return g;
 }
+
+/** Glossy dark brown tapioca pearl material, shared by the bowl and the drinks. */
+export const pearlMat = new T.MeshPhysicalMaterial({ color: 0x2a140a, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.1, envMapIntensity: 1.3 });
+
+/** Steel bowl heaped with tapioca pearls, a slotted ladle resting in it. */
+export function makePearlBowl(): T.Group {
+  const g = new T.Group();
+  const steel = new T.MeshStandardMaterial({ color: 0xdcd8cf, metalness: 0.85, roughness: 0.28, side: T.DoubleSide });
+  const bowl = new T.Mesh(new T.LatheGeometry(spline([[0.001, 0], [0.42, 0.02], [0.62, 0.22], [0.7, 0.5], [0.74, 0.52]], 24), 40), steel);
+  g.add(bowl);
+  const r = rng(21);
+  const pearl = new T.SphereGeometry(0.075, 12, 8);
+  for (let i = 0; i < 46; i++) {
+    const a = r() * Math.PI * 2;
+    const d = Math.sqrt(r()) * 0.56;
+    const p = new T.Mesh(pearl, pearlMat);
+    p.position.set(Math.cos(a) * d, 0.42 + (0.56 - d) * 0.22 + r() * 0.04, Math.sin(a) * d);
+    g.add(p);
+  }
+  const ladle = new T.Group();
+  const cup = new T.Mesh(new T.SphereGeometry(0.2, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), steel);
+  const handle = new T.Mesh(new T.CylinderGeometry(0.025, 0.025, 1.3, 8), steel);
+  handle.position.set(0, 0.62, 0);
+  ladle.add(cup, handle);
+  ladle.position.set(0.18, 0.5, 0.05);
+  ladle.rotation.z = -0.5;
+  g.add(ladle);
+  return g;
+}

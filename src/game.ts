@@ -15,6 +15,7 @@ import {
   VESSEL_ASK,
   blankDrink,
   drinkMl,
+  orderPrice,
   recipeOf,
   score,
   sweetWord,
@@ -27,7 +28,7 @@ import {
 import { Phone } from './phone';
 import { UPGRADES, clearSave, loadSave, writeSave, type UpgradeId } from './shop';
 import { CUP_HOME, SERVE_HOME, type DrinkStage } from './stage';
-import { HANG_SLOTS, Table, type DropTarget, type TableItem, type TableRules } from './table';
+import { HANG_SLOTS, Table, hookCount, type DropTarget, type TableItem, type TableRules } from './table';
 
 const $ = <E extends Element = HTMLElement>(sel: string) => document.querySelector<E>(sel) as E;
 const RING_LENGTH = 138.2;
@@ -67,7 +68,7 @@ function avatarSvg(o: Order): string {
 /** Short description of a finished drink, for its name tag on the hook. */
 function describe(d: Drink): string {
   const parts = [d.base ? BASE[d.base].n : 'ไม่มีน้ำฐาน', ...ADD_IDS.filter((k) => d.milk[k]).map((k) => ADD[k] + (d.milk[k] > 1 ? ` ×${d.milk[k]}` : ''))];
-  return `${parts.join(' + ')}${d.garnish === 'straw' ? ' · มีหลอด' : ''}`;
+  return `${parts.join(' + ')}${d.pearls ? ' + ไข่มุก' : ''}${d.garnish === 'straw' ? ' · มีหลอด' : ''}`;
 }
 
 export function startGame(stage: DrinkStage): void {
@@ -147,7 +148,7 @@ export function startGame(stage: DrinkStage): void {
     if (!drink.poured) {
       if (!drink.base) {
         return trayCount()
-          ? 'ลากถุงที่แขวนรอส่งมุมขวาบนไปวางบนตั๋วของลูกค้าที่สั่ง หรือเริ่มชงแก้วใหม่'
+          ? 'ลากถุงที่แขวนรอส่งด้านบนไปวางบนตั๋วของลูกค้าที่สั่ง หรือเริ่มชงแก้วใหม่'
           : 'เลือกออเดอร์ทางซ้าย แล้วลากน้ำฐานมาใส่แก้วตวง';
       }
       if (BREWED.includes(drink.base) && !drink.milk.hot) {
@@ -159,6 +160,7 @@ export function startGame(stage: DrinkStage): void {
           : 'เติมส่วนผสมตามสูตร แล้วลากช้อนข้างนมข้นมาใส่แก้วตวงเพื่อคน';
       }
       if (!drink.vessel) return 'กดที่ถังแช่สีแดงมุมขวาเพื่อเปิดฝา แล้วลากแก้วหรือถุงหิ้วมาวางข้างแก้วตวง';
+      if (owned.has('pearl') && !drink.pearls && waiting.some((c) => c?.order.pearls)) return 'ถ้าสั่งไข่มุก ลากชามไข่มุกมาตักใส่ภาชนะก่อน แล้วลากแก้วตวงไปเท';
       return 'ลากแก้วตวงไปเทลงภาชนะ';
     }
     return 'ถ้าลูกค้าขอหลอด ลากหลอดข้างนมข้นมาใส่ แล้วกดปุ่มใต้ภาชนะเพื่อแขวนรอส่ง';
@@ -175,8 +177,9 @@ export function startGame(stage: DrinkStage): void {
     const extras: string[] = [];
     if (parts.length) extras.push(`คนแล้ว ${Math.round(drink.mix * 100)}%`);
     if (drink.vessel) extras.push(VESSEL[drink.vessel]);
+    if (drink.pearls) extras.push('ไข่มุก');
     if (drink.garnish !== 'none') extras.push(GARNISH[drink.garnish]);
-    extras.push(`แขวนรอส่ง ${trayCount()}/${HANG_SLOTS.length}`);
+    extras.push(`แขวนรอส่ง ${trayCount()}/${hookCount(owned)}`);
     lines.push(extras.join(' · '));
     contents.textContent = lines.join('\n');
     if (!stirring) say(nextHint());
@@ -262,6 +265,8 @@ export function startGame(stage: DrinkStage): void {
           return drink.poured ? [] : ['serve'];
         case 'garnish':
           return drink.vessel ? ['serve'] : [];
+        case 'topping':
+          return drink.vessel && !drink.poured && !drink.pearls ? ['serve'] : [];
         case 'cooler':
         case 'ready':
           return [];
@@ -301,6 +306,9 @@ export function startGame(stage: DrinkStage): void {
         }
         drink.poured = true;
         stage.startPour(drink);
+      } else if (item.kind === 'topping') {
+        drink.pearls = true;
+        act = { pos: aboveServe(3.1), tilt: -1.0, seconds: 0.8 };
       } else if (item.kind === 'garnish') {
         drink.garnish = 'straw';
         act = { pos: aboveServe(3.1), tilt: 0, seconds: 0.4 };
@@ -347,10 +355,13 @@ export function startGame(stage: DrinkStage): void {
   table.applyUpgrades(owned);
 
   /** Picks a customer who isn't already waiting, when there are enough to choose from. */
+  /** Menus that need a bought powder or topping only come up once the cart has it. */
+  const canMake = (o: Order) => (o.base !== 'cocoa' || owned.has('cocoa')) && (o.base !== 'matcha' || owned.has('matcha')) && (!o.pearls || owned.has('pearl'));
+
   function newOrder(): Order {
     const here = waiting.filter((c): c is Customer => c !== null).map((c) => c.order);
-    const free = ORDERS.filter((o) => !here.includes(o));
-    const pool = free.length ? free : ORDERS;
+    const free = ORDERS.filter((o) => canMake(o) && !here.includes(o));
+    const pool = free.length ? free : ORDERS.filter(canMake);
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
@@ -388,7 +399,7 @@ export function startGame(stage: DrinkStage): void {
       const face = el('span', { className: 'face' });
       face.innerHTML = avatarSvg(o);
       who.append(face, el('span', { text: `${o.who}: ${o.quote}` }));
-      text.append(el('div', { className: 'name', text: `${o.name} · ${VESSEL_ASK[o.vessel]}` }), who, el('div', { className: 'recipe', text: `สูตร: ${recipeOf(o)}` }));
+      text.append(el('div', { className: 'name', text: `${o.name} · ${VESSEL_ASK[o.vessel]}` }), who, el('div', { className: 'recipe', text: `สูตร: ${recipeOf(o)} · ${orderPrice(o)} บาท` }));
       const wait = el('div', { className: 'wait' });
       wait.setAttribute('role', 'progressbar');
       wait.setAttribute('aria-label', `เวลารอของ${o.who}`);
@@ -474,7 +485,7 @@ export function startGame(stage: DrinkStage): void {
   /** Bags the finished drink, hangs it on a free hook and clears the work area for the next one. */
   function finish(): void {
     if (!drink.vessel || !drink.poured || stage.pouring) return;
-    const slot = tray.indexOf(null);
+    const slot = tray.findIndex((entry, i) => !entry && i < hookCount(owned));
     if (slot < 0) {
       say('ตะขอแขวนรอส่งเต็มแล้ว ส่งถุงให้ลูกค้าก่อน');
       return;
@@ -670,6 +681,17 @@ export function startGame(stage: DrinkStage): void {
       tools.hidden = !tools.hidden;
       $('#dev-toggle').setAttribute('aria-expanded', String(!tools.hidden));
     });
+    const devOrder = (pick: (o: Order) => boolean) => {
+      const slot = waiting.findIndex(Boolean);
+      const c = waiting[slot];
+      if (!c) return;
+      const menus = ORDERS.filter(pick);
+      c.order = menus.find((o) => !waiting.some((w) => w?.order === o)) ?? menus.find((o) => o !== c.order) ?? menus[0];
+      c.patience = c.total;
+      thumbFor(c.order);
+      renderOrders(slot);
+      updateHud();
+    };
     const actions: Record<string, () => void> = {
       'dev-end-day': () => {
         if (dayOpen) endDay();
@@ -682,18 +704,9 @@ export function startGame(stage: DrinkStage): void {
         if (!dayCard.hidden && !phone.isOpen) renderDayCard(day - 1);
         phone.refresh();
       },
-      'dev-lemon': () => {
-        // Swaps the first waiting customer for a lemon order, to try the fresh-lime tip.
-        const slot = waiting.findIndex(Boolean);
-        const c = waiting[slot];
-        if (!c) return;
-        const lemons = ORDERS.filter((o) => o.milk.lemon > 0);
-        c.order = lemons.find((o) => !waiting.some((w) => w?.order === o)) ?? lemons.find((o) => o !== c.order) ?? lemons[0];
-        c.patience = c.total;
-        thumbFor(c.order);
-        renderOrders(slot);
-        updateHud();
-      },
+      // Swap the first waiting customer for a lemon order (to try the fresh-lime tip) or a pearl order.
+      'dev-lemon': () => devOrder((o) => o.milk.lemon > 0),
+      'dev-pearl': () => devOrder((o) => o.pearls),
       'dev-rush': () => {
         waiting.forEach((c) => c && (c.patience = Math.min(c.patience, 5)));
       },

@@ -1,10 +1,10 @@
 import * as T from 'three';
 import { ADD, ADD_IDS, BASE, GARNISH, VESSEL, type AddId, type BaseId, type VesselId } from './data';
-import { makeBottle, makeCan, makeCarryBag, makeCooler, makeFrother, makeGarnish, makeHookRail, makeHotPot, makeLimeBowl, makePlate, makeSodaBottle, makeTableSpoon, makeThermoPot, makeTin, makeUtensilCup, makeVesselStack } from './models';
+import { makeBottle, makeCan, makeCarryBag, makeCooler, makeFrother, makeGarnish, makeHookRail, makeHotPot, makeLimeBowl, makePearlBowl, makePlate, makeSodaBottle, makeTableSpoon, makeThermoPot, makeTin, makeUtensilCup, makeVesselStack } from './models';
 import type { UpgradeId } from './shop';
 import { buildShell, CUP_HOME, SERVE_HOME, type DrinkStage } from './stage';
 
-export type ItemKind = 'base' | 'add' | 'garnish' | 'vessel' | 'spoon' | 'frother' | 'glass' | 'cooler' | 'ready';
+export type ItemKind = 'base' | 'add' | 'garnish' | 'topping' | 'vessel' | 'spoon' | 'frother' | 'glass' | 'cooler' | 'ready';
 export type DropTarget = 'cup' | 'serve';
 
 export interface TableItem {
@@ -57,7 +57,9 @@ const COOLER_SCALE = 1.9;
 /** Finished drinks hang in carry bags from S hooks on a rail at the top right. */
 const RAIL_Y = 3.35;
 const HOOK_DROP = 0.42;
-export const HANG_SLOTS = [3.85, 4.9, 5.95].map((x) => new T.Vector3(x, RAIL_Y - HOOK_DROP, -2.2));
+/** The fourth slot, at the left end, only has a hook once the extra hook is bought. */
+export const HANG_SLOTS = [3.85, 4.9, 5.95, 2.8].map((x) => new T.Vector3(x, RAIL_Y - HOOK_DROP, -2.2));
+export const hookCount = (owned: ReadonlySet<UpgradeId>) => (owned.has('hook') ? 4 : 3);
 const HANG_SCALE = 0.42;
 /** Hot water pot on its plate, where the waiting tray used to be. */
 const HOT_POT = new T.Vector3(-3.55, 0.07, 0.9);
@@ -74,7 +76,11 @@ const BASE_MODELS: Record<BaseId, () => T.Object3D> = {
   coffee: () => makeTin('กาแฟ', '#3a2013', '#f3d9a4'),
   pea: () => makeBottle('อัญชัน', '#2a3cc4'),
   red: () => makeBottle('น้ำแดง', '#d6243c'),
+  cocoa: () => makeTin('โกโก้', '#4a2414', '#f6d9a8'),
+  matcha: () => makeTin('มัทฉะ', '#3f7d2a', '#f4f7e0'),
 };
+/** Bought powders stand at the two ends of the shelf. */
+const EXTRA_SHELF_X: Partial<Record<BaseId, number>> = { cocoa: -3.99, matcha: 3.99 };
 const ADD_MODELS: Record<AddId, () => T.Object3D> = {
   cond: () => makeCan('นมข้น', '#f4ecd8', '#1d5aa8'),
   evap: () => makeCan('นมระเหย', '#c8342f', '#fff'),
@@ -102,7 +108,9 @@ export class Table {
   private coolerOpen = false;
   private coolerLid: T.Group | null = null;
   /** For each upgrade, the items it puts out and the ones it replaces. */
-  private readonly upgradeItems: Record<UpgradeId, { on: TableItem[]; off: TableItem[] }> = { frother: { on: [], off: [] }, kettle: { on: [], off: [] }, lime: { on: [], off: [] } };
+  private readonly upgradeItems: Partial<Record<UpgradeId, { on: TableItem[]; off: TableItem[] }>> = {};
+  /** Scenery an upgrade swaps in, such as the longer hook rail. */
+  private readonly upgradeProps: Partial<Record<UpgradeId, { on: T.Object3D[]; off: T.Object3D[] }>> = {};
 
   constructor(
     private readonly stage: DrinkStage,
@@ -163,7 +171,7 @@ export class Table {
 
   /** Sets every ingredient out on the shelf and table. */
   private setOut(): void {
-    (Object.keys(BASE) as BaseId[]).forEach((k, i) => this.add('base', k, BASE[k].n, BASE_MODELS[k](), -2.85 + i * 1.14, SHELF_Y, SHELF_Z, 0.8));
+    (Object.keys(BASE) as BaseId[]).forEach((k, i) => this.add('base', k, BASE[k].n, BASE_MODELS[k](), EXTRA_SHELF_X[k] ?? -2.85 + i * 1.14, SHELF_Y, SHELF_Z, 0.8));
     // Everything stays off the mat, in a group on each side of the glasses.
     const addAt: Record<AddId, [number, number]> = { soda: [-2.75, -1.5], syrup: [-3.6, -1.5], lemon: [-4.45, -1.5], cond: [3.45, -1.5], evap: [4.25, -1.5], hot: [HOT_POT.x, HOT_POT.z] };
     ADD_IDS.forEach((k) => this.add('add', k, ADD[k], ADD_MODELS[k](), addAt[k][0], k === 'hot' ? HOT_POT.y : 0.02, addAt[k][1], k === 'hot' ? 0.8 : 0.72));
@@ -189,9 +197,14 @@ export class Table {
 
     const plate = makePlate(0.85);
     plate.position.set(HOT_POT.x, 0.02, HOT_POT.z);
-    const rail = makeHookRail(HANG_SLOTS.map((s) => s.x - HANG_SLOTS[1].x), 3.6, HOOK_DROP, 3);
+    const rail = makeHookRail(HANG_SLOTS.slice(0, 3).map((s) => s.x - HANG_SLOTS[1].x), 3.6, HOOK_DROP, 3);
     rail.position.set(HANG_SLOTS[1].x, RAIL_Y, HANG_SLOTS[0].z);
-    this.stage.tableG.add(plate, rail);
+    // With the extra hook the rail is longer, reaching left to the fourth hook.
+    const mid4 = (HANG_SLOTS[2].x + HANG_SLOTS[3].x) / 2;
+    const rail4 = makeHookRail(HANG_SLOTS.map((s) => s.x - mid4), 4.65, HOOK_DROP, 3);
+    rail4.position.set(mid4, RAIL_Y, HANG_SLOTS[0].z);
+    this.upgradeProps.hook = { on: [rail4], off: [rail] };
+    this.stage.tableG.add(plate, rail, rail4);
 
     // Upgrades are set out now and hidden until bought.
     const frother = this.add('frother', 'frother', 'เครื่องตีฟองนม', makeFrother(), UTENSIL_CUP.x + 0.1, 0.02, UTENSIL_CUP.z + 0.95, 0.6);
@@ -199,7 +212,10 @@ export class Table {
     kettle.press = true;
     const lime = this.add('add', 'lemon', 'มะนาวแป้นสด', makeLimeBowl(), -4.45, 0.02, -1.5, 0.75);
     const find = (kind: ItemKind, key: string, not: TableItem) => this.items.find((i) => i.kind === kind && i.key === key && i !== not) as TableItem;
-    this.upgradeItems.frother.on.push(frother);
+    const pearl = this.add('topping', 'pearl', 'ไข่มุกบุก (ตักใส่ภาชนะ)', makePearlBowl(), 3.95, 0.02, -0.3, 0.62);
+    this.upgradeItems.frother = { on: [frother], off: [] };
+    this.upgradeItems.pearl = { on: [pearl], off: [] };
+    (['cocoa', 'matcha'] as const).forEach((k) => (this.upgradeItems[k] = { on: [this.find('base', k) as TableItem], off: [] }));
     this.upgradeItems.kettle = { on: [kettle], off: [find('add', 'hot', kettle)] };
     this.upgradeItems.lime = { on: [lime], off: [find('add', 'lemon', lime)] };
     this.applyUpgrades(new Set());
@@ -231,8 +247,13 @@ export class Table {
   applyUpgrades(owned: Set<UpgradeId>): void {
     (Object.keys(this.upgradeItems) as UpgradeId[]).forEach((id) => {
       const has = owned.has(id);
-      this.upgradeItems[id].on.forEach((i) => this.showItem(i, has));
-      this.upgradeItems[id].off.forEach((i) => this.showItem(i, !has));
+      this.upgradeItems[id]?.on.forEach((i) => this.showItem(i, has));
+      this.upgradeItems[id]?.off.forEach((i) => this.showItem(i, !has));
+    });
+    (Object.keys(this.upgradeProps) as UpgradeId[]).forEach((id) => {
+      const has = owned.has(id);
+      this.upgradeProps[id]?.on.forEach((o) => (o.visible = has));
+      this.upgradeProps[id]?.off.forEach((o) => (o.visible = !has));
     });
   }
 

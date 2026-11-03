@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { canvasOf, ctx2d, mixHex, paintBackground, paintEnv, paintTerrazzo, radial, rng, texOf } from './art';
 import { BASE, ICE, POWDER, baseDissolved, drinkMl, type Drink, type GarnishId, type Order, type VesselId } from './data';
-import { iceCube, makeFrother, makeGarnish, makePaperCarrier, spline } from './models';
+import { iceCube, makeFrother, makeGarnish, makePaperCarrier, pearlMat, spline } from './models';
 
 const reduceMotion = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const vec2 = (x: number, y: number) => new T.Vector2(x, y);
@@ -102,6 +102,8 @@ const ICE_LAYERS = 6;
 const cupY = (L: number) => CUP_FLOOR + L * 1.5;
 const rCup = (y: number) => 0.63 + (y / 1.72) * 0.13;
 const BUBBLES = 70;
+/** Tapioca pearls sit in rings on the vessel floor, pressed against the wall where they show. */
+const PEARL_RINGS = [12, 11, 9];
 
 export interface StageElements {
   canvas: HTMLCanvasElement;
@@ -124,6 +126,7 @@ export class DrinkStage {
   private readonly glow: T.Mesh<T.PlaneGeometry, T.MeshBasicMaterial>;
 
   private readonly servingG = new T.Group();
+  private readonly pearls = new T.Group();
   private readonly shells: Record<string, T.Group> = {};
   private shellNow: T.Group | null = null;
   private vessel: VesselId = 'cup';
@@ -203,7 +206,7 @@ export class DrinkStage {
     const serveShadow = new T.Mesh(new T.PlaneGeometry(3.4, 2.2), shadowMat);
     serveShadow.rotation.x = -Math.PI / 2;
     serveShadow.position.set(SERVE_HOME.x + 0.1, 0.09, SERVE_HOME.z - 0.05);
-    const shelf = new T.Mesh(new T.BoxGeometry(7.4, 0.95, 0.95), new T.MeshStandardMaterial({ color: 0x8e5a30, roughness: 0.55, envMapIntensity: 0.8 }));
+    const shelf = new T.Mesh(new T.BoxGeometry(9.4, 0.95, 0.95), new T.MeshStandardMaterial({ color: 0x8e5a30, roughness: 0.55, envMapIntensity: 0.8 }));
     shelf.position.set(0, 0.475, -2.7);
     this.tableG.add(shelf);
     scene.add(this.tableG, this.cupRing, this.serveRing, serveShadow);
@@ -237,6 +240,17 @@ export class DrinkStage {
       this.servingG.add(c);
       this.cubes.push(c);
     }
+
+    const pearl = new T.SphereGeometry(0.1, 14, 10);
+    PEARL_RINGS.forEach((n, ring) => {
+      for (let i = 0; i < n; i++) {
+        const p = new T.Mesh(pearl, pearlMat);
+        p.userData = { ring, a: (i / n) * Math.PI * 2 + ring * 0.4 };
+        this.pearls.add(p);
+      }
+    });
+    this.pearls.visible = false;
+    this.servingG.add(this.pearls);
 
     const rb = rng(9);
     for (let i = 0; i < BUBBLES; i++) this.bubbleState.push({ a: rb() * 6.28, rf: Math.sqrt(rb()) * 0.82, y: rb(), v: 0.05 + rb() * 0.14 });
@@ -571,6 +585,7 @@ export class DrinkStage {
     this.powder.visible = powder !== undefined;
     if (powder) this.powder.material.color.set(powder);
     this.cubes.forEach((c, i) => (c.visible = i < ICE[s.ice].k));
+    this.pearls.visible = s.pearls;
     this.setGarnish(s.garnish, instant);
     if (instant) {
       this.level = this.levelTarget;
@@ -595,6 +610,12 @@ export class DrinkStage {
       const cy = floor + 0.24 + d.layer * ((iceTop - floor - 0.24) / (ICE_LAYERS - 1));
       const r = Math.max(0, this.radiusAt(cy) * 0.62 - 0.18) * d.rf;
       c.position.set(Math.cos(d.a) * r, cy, Math.sin(d.a) * r);
+    });
+    this.pearls.children.forEach((p) => {
+      const d = p.userData;
+      const py = floor + 0.1 + d.ring * 0.17;
+      const r = this.radiusAt(py) * 0.94 - 0.06;
+      p.position.set(Math.cos(d.a) * r, py, Math.sin(d.a) * r);
     });
     if (this.garnishObj && this.garnishObj.userData.float !== undefined) {
       this.garnishObj.position.set(this.garnishObj.userData.float, (has ? y : floor + 0.3) + 0.06 + motion * Math.sin(elapsed * 0.8) * 0.012, 0.32);
@@ -797,7 +818,7 @@ export class DrinkStage {
     this.serveScale = 1;
     this.setGarnish('none', true);
     this.setVessel(o.vessel, true);
-    this.applyDrink({ base: o.base, milk: o.milk, ice: o.ice, garnish: o.garnish, mix: 1, vessel: o.vessel, poured: true }, true);
+    this.applyDrink({ base: o.base, milk: o.milk, ice: o.ice, garnish: o.garnish, mix: 1, vessel: o.vessel, poured: true, pearls: o.pearls }, true);
 
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(420, 330, false);
