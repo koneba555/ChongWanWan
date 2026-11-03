@@ -447,7 +447,7 @@ export function startGame(stage: DrinkStage): void {
     today.tips += tip;
     showMoney();
     persist();
-    const tipText = tip ? ` · ทิป ${tip}` : '';
+    const tipText = tip ? ` · ทิป ${tip}${lime ? ` (มะนาวสด ${lime})` : ''}` : '';
     showResult(r.verdict, `${c.order.who} · ${r.pay ? `+${r.pay} บาท${tipText}` : 'ไม่ได้เงิน'}`, r.rows);
     customerDone(slot);
   }
@@ -681,6 +681,18 @@ export function startGame(stage: DrinkStage): void {
         // Refresh the shop so newly affordable upgrades can be bought.
         if (!dayCard.hidden && !phone.isOpen) renderDayCard(day - 1);
         phone.refresh();
+      },
+      'dev-lemon': () => {
+        // Swaps the first waiting customer for a lemon order, to try the fresh-lime tip.
+        const slot = waiting.findIndex(Boolean);
+        const c = waiting[slot];
+        if (!c) return;
+        const lemons = ORDERS.filter((o) => o.milk.lemon > 0);
+        c.order = lemons.find((o) => !waiting.some((w) => w?.order === o)) ?? lemons.find((o) => o !== c.order) ?? lemons[0];
+        c.patience = c.total;
+        thumbFor(c.order);
+        renderOrders(slot);
+        updateHud();
       },
       'dev-rush': () => {
         waiting.forEach((c) => c && (c.patience = Math.min(c.patience, 5)));
