@@ -29,18 +29,18 @@ img { max-width: 100%; }
 #brand b { display: block; font-weight: 500; font-size: 21px; line-height: 1.35; color: var(--cream); text-shadow: 0 2px 6px #0009; }
 #money { font-size: 16px; font-weight: 500; color: var(--gold); background: #1a0f08cc; border: 1px solid #f2c14e66; padding: 6px 16px; border-radius: 99px; font-variant-numeric: tabular-nums; }
 
-#ticket { position: absolute; z-index: 3; left: max(24px, env(safe-area-inset-left, 0px)); top: 96px; width: clamp(190px, 16vw, 250px); filter: drop-shadow(0 12px 18px #0008); pointer-events: none; }
-#photo { position: relative; z-index: 1; background: #fbf3df; padding: 8px; transform: rotate(-3deg); border-radius: 2px; }
-#photo .in { position: relative; aspect-ratio: 1.4; background: radial-gradient(circle at 55% 50%, #6a4a2c, #2c1b0d 78%); overflow: hidden; }
-#photo img { position: absolute; inset: 4% 0 0 0; width: 100%; height: 96%; object-fit: contain; }
-#seal { position: absolute; left: 6px; top: 6px; width: 44px; height: 44px; border-radius: 50%; border: 2px solid #d6a94a; color: #e8c26a; display: grid; place-items: center; font-family: var(--display); font-size: 14px; background: #3a2412cc; transform: rotate(-14deg); }
-#slip { margin: -6px 8px 0; padding: 14px 12px; background: var(--ticket); border-radius: 0 0 3px 3px; }
-#order-name { background: var(--walnut); color: var(--cream); text-align: center; font-weight: 500; font-size: 15px; padding: 4px 6px; border-radius: 3px; text-wrap: balance; }
-#who { display: flex; gap: 9px; margin-top: 9px; align-items: flex-start; }
-#avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; background: #fff3d8; border: 2px solid #f6dca5; overflow: hidden; }
-#quote { font-size: 13px; line-height: 1.45; font-weight: 300; color: #fff3df; min-width: 0; }
-#recipe { margin-top: 8px; padding-top: 7px; border-top: 1px dashed #ffe3b866; font-size: 12.5px; line-height: 1.4; color: #ffe9c4; }
 
+/* Waiting customers: one card each, a finished drink is dropped onto the card it was made for. */
+#orders { position: absolute; z-index: 3; left: max(24px, env(safe-area-inset-left, 0px)); top: 84px; width: clamp(250px, 19vw, 300px); display: flex; flex-direction: column; gap: 10px; }
+.order { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; background: var(--ticket); border-radius: 6px; padding: 8px; box-shadow: 0 8px 18px #0007; transition: transform .15s, box-shadow .15s; }
+.order.aim { transform: translateX(8px); box-shadow: 0 0 0 3px var(--gold), 0 8px 18px #0007; }
+.order img { width: 70px; height: 70px; object-fit: contain; background: radial-gradient(circle at 50% 45%, #6a4a2c, #2c1b0d 78%); border: 3px solid #fbf3df; border-radius: 3px; box-sizing: border-box; }
+.order .name { background: var(--walnut); font-weight: 500; font-size: 14px; line-height: 1.4; padding: 2px 8px; border-radius: 3px; }
+.order .who { display: flex; gap: 6px; align-items: flex-start; margin-top: 5px; font-size: 12.5px; line-height: 1.35; font-weight: 300; }
+.order .face { flex: none; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; border: 1px solid #f6dca5; }
+.order .recipe { margin-top: 5px; padding-top: 4px; border-top: 1px dashed #ffe3b866; font-size: 12px; line-height: 1.35; color: #ffe9c4; }
+.order.new { animation: arrive .5s ease-out; }
+@keyframes arrive { from { opacity: 0; transform: translateX(-24px); } }
 #tag { position: absolute; z-index: 4; transform: translate(-50%, -100%); background: #fff5df; color: var(--ink); font-weight: 500; font-size: 15px; padding: 3px 12px; border-radius: 99px; box-shadow: 0 4px 12px #0007; white-space: nowrap; pointer-events: none; }
 
 #hud { position: absolute; z-index: 3; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(620px, calc(100% - 330px)); display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--strip); border: 1px solid #f2c14e44; border-radius: 12px; padding: 7px 16px; text-align: center; pointer-events: none; }
@@ -55,10 +55,13 @@ img { max-width: 100%; }
 #actions { position: absolute; z-index: 3; right: max(24px, env(safe-area-inset-right, 0px)); bottom: 18px; display: flex; gap: 8px; }
 .pill { min-width: 110px; background: #fffaf0; color: var(--ink); border: 2px solid #fff; border-radius: 99px; padding: 10px 18px; font: 500 16px var(--body); cursor: pointer; box-shadow: 0 6px 16px #0007; transition: transform .12s; }
 .pill:hover { transform: scale(1.03); background: #fff; }
+/* Big buttons pinned just in front of the glass they finish, where the eye already is. */
+.under-glass { position: absolute; z-index: 4; transform: translate(-50%, 0); min-width: 190px; padding: 13px 28px; font-size: 19px; box-shadow: 0 0 0 3px var(--gold), 0 8px 20px #0008; }
+.under-glass:hover { transform: translate(-50%, 0) scale(1.04); }
 .ghost { background: #1a0f08d9; color: var(--cream); border: 1px solid #fff5df66; border-radius: 99px; padding: 10px 16px; font: 400 15px var(--body); cursor: pointer; }
 .pill:focus-visible, .ghost:focus-visible { outline: 2px solid var(--gold-pale); outline-offset: 2px; }
 
-#result-card { position: absolute; z-index: 5; right: max(24px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%); width: min(300px, calc(100% - 48px)); box-sizing: border-box; display: flex; flex-direction: column; align-items: stretch; gap: 6px; background: #fbf3df; color: var(--ink); border-radius: 4px; padding: 16px 18px; box-shadow: 0 14px 34px #0009; text-align: center; }
+#result-card { position: absolute; z-index: 5; right: max(24px, env(safe-area-inset-right, 0px)); top: 76px; width: min(300px, calc(100% - 48px)); box-sizing: border-box; display: flex; flex-direction: column; align-items: stretch; gap: 6px; background: #fbf3df; color: var(--ink); border-radius: 4px; padding: 16px 18px; box-shadow: 0 14px 34px #0009; text-align: center; }
 #verdict { font-family: var(--display); font-weight: 700; font-size: 38px; line-height: 1.15; color: var(--ticket); }
 #earn { font-size: 20px; font-weight: 500; }
 #breakdown { list-style: none; padding: 0; margin: 4px 0 8px; font-size: 14px; font-weight: 300; }
@@ -73,16 +76,6 @@ img { max-width: 100%; }
   #brand small { display: none; }
   #brand b { font-size: 17px; }
   #money { font-size: 14px; padding: 4px 12px; }
-  #ticket { top: 50px; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); width: auto; display: flex; align-items: stretch; background: var(--ticket); border-radius: 6px; filter: none; }
-  #photo { transform: none; width: 84px; flex: none; padding: 4px; border-radius: 6px 0 0 6px; }
-  #photo .in { aspect-ratio: auto; height: 100%; }
-  #seal { display: none; }
-  #slip { margin: 0; flex: 1; min-width: 0; padding: 8px 10px; background: none; }
-  #order-name { font-size: 14px; padding: 2px 8px; }
-  #who { margin-top: 5px; gap: 8px; }
-  #avatar { width: 34px; height: 34px; }
-  #quote { font-size: 12.5px; line-height: 1.4; }
-  #recipe { margin-top: 4px; padding-top: 4px; font-size: 12px; line-height: 1.35; }
   #hud { width: calc(100% - 32px); bottom: 70px; padding: 6px 10px; }
   #contents { font-size: 13px; }
   #hint { font-size: 12px; }
@@ -102,5 +95,5 @@ img { max-width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pill { transition: none; }
+  .pill, .order { transition: none; animation: none; }
 }

@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { canvasOf, ctx2d, mixHex, paintBackground, paintEnv, paintTerrazzo, radial, rng, texOf } from './art';
-import { BASE, ICE, type Drink, type GarnishId, type Order, type VesselId } from './data';
-import { iceCube, makeGarnish, spline } from './models';
+import { BASE, ICE, POWDER, baseDissolved, drinkMl, type Drink, type GarnishId, type Order, type VesselId } from './data';
+import { iceCube, makeGarnish, makePaperCarrier, spline } from './models';
 
 const reduceMotion = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const vec2 = (x: number, y: number) => new T.Vector2(x, y);
@@ -64,7 +64,8 @@ export function buildShell(k: VesselId, finished: boolean): T.Group {
   const g = new T.Group();
   const pts = vesselPts(k, finished);
   const lathe = new T.LatheGeometry(pts, 96);
-  addGlassSkin(g, k === 'bag' ? crinkle(lathe) : lathe);
+  addGlassSkin(g, k !== 'cup' ? crinkle(lathe) : lathe);
+  if (k === 'carrier') g.add(makePaperCarrier());
   const shine = (start: number, length: number, y0: number, y1: number, opacity: number) => {
     const strip = pts.filter((p) => p.y >= y0 && p.y <= y1).map((p) => vec2(p.x * 1.004, p.y));
     const m = new T.Mesh(new T.LatheGeometry(strip, 12, start, length), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity, side: T.DoubleSide, depthWrite: false, blending: T.AdditiveBlending }));
@@ -91,7 +92,13 @@ export function buildShell(k: VesselId, finished: boolean): T.Group {
   return g;
 }
 
+/** The measuring glass marks 0 ml at its floor and 200 ml at 1.55 high. */
 const CUP_FLOOR = 0.17;
+const CUP_ML_PER_LEVEL = 216.8;
+/** Packed with ice, a serving vessel is full with about this much drink poured in. */
+const SERVE_ML = 170;
+/** Ice is stacked in this many layers, three cubes to a layer. */
+const ICE_LAYERS = 6;
 const cupY = (L: number) => CUP_FLOOR + L * 1.5;
 const rCup = (y: number) => 0.63 + (y / 1.72) * 0.13;
 const BUBBLES = 70;
@@ -138,6 +145,7 @@ export class DrinkStage {
   private serveScale = SERVE_SCALE;
   private readonly cupLiquid = new T.Mesh(new T.BufferGeometry(), this.liquidMat);
   private readonly spoon = new T.Group();
+  private readonly powder = new T.Mesh(new T.SphereGeometry(0.42, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xe2742a, roughness: 0.95 }));
   private cupLevel = 0;
   private cupTarget = 0;
   private cupBuilt = -1;
@@ -218,10 +226,11 @@ export class DrinkStage {
     this.buildMeasuringGlass();
 
     const r = rng(5);
-    for (let i = 0; i < 8; i++) {
-      const c = iceCube(0.34 + r() * 0.09);
+    for (let i = 0; i < ICE_LAYERS * 3; i++) {
+      const c = iceCube(0.36 + r() * 0.09);
       c.rotation.set(r() * 3, r() * 3, r() * 3);
-      c.userData = { a: i * 2.4, rf: 0.35 + r() * 0.65, dy: i < 4 ? (i % 2 ? 0.02 : 0.14) : 0.25 + r() * 0.4, p: r() * 6 };
+      const layer = Math.floor(i / 3);
+      c.userData = { layer, a: (i % 3) * 2.09 + layer * 0.9, rf: 0.7 + r() * 0.3 };
       c.visible = false;
       c.children[0].renderOrder = 1;
       this.servingG.add(c);
@@ -247,6 +256,30 @@ export class DrinkStage {
     ring.position.set(x, 0.1, 0.1);
     ring.visible = false;
     return ring;
+  }
+
+  /** Copies the finished serving vessel, with its own liquid colours, so it can wait on the tray while the next drink is made. */
+  bakeServing(): T.Group {
+    const copy = this.servingG.clone(true);
+    copy.position.set(0, 0, 0);
+    copy.rotation.set(0, 0, 0);
+    copy.visible = true;
+    const canvas = canvasOf(this.liqCanvas.width, this.liqCanvas.height);
+    ctx2d(canvas).drawImage(this.liqCanvas, 0, 0);
+    const tex = texOf(canvas);
+    const mat = this.liquidMat.clone();
+    mat.map = tex;
+    mat.emissiveMap = tex;
+    const bubbles: T.Object3D[] = [];
+    copy.traverse((o) => {
+      if (o instanceof T.Points) bubbles.push(o);
+      else if (o instanceof T.Mesh && o.material === this.liquidMat) {
+        o.material = mat;
+        o.geometry = o.geometry.clone();
+      }
+    });
+    bubbles.forEach((o) => o.removeFromParent());
+    return copy;
   }
 
   setDropHints(cup: boolean, serve: boolean): void {
@@ -325,6 +358,10 @@ export class DrinkStage {
     marks.position.y = 0.87;
     marks.renderOrder = 4;
 
+    this.powder.position.y = CUP_FLOOR;
+    this.powder.scale.y = 0.4;
+    this.powder.visible = false;
+    this.cupG.add(this.powder);
     this.cupLiquid.renderOrder = 2;
     this.cupLiquid.visible = false;
     cupG.add(floor, lip, highlight, marks, this.cupLiquid);
@@ -401,13 +438,20 @@ export class DrinkStage {
     const W = 256;
     const H = 512;
     const mx = s.mix;
-    const B = s.base ? BASE[s.base] : null;
+    const B = baseDissolved(s) && s.base ? BASE[s.base] : null;
     const MILK = B ? B.milk : '#fff1dc';
     const m = s.milk.cond + s.milk.evap;
     const syr = s.milk.syrup;
     const soda = s.milk.soda;
     const lem = s.milk.lemon;
-    const b = B ? B.c : m ? MILK : soda ? '#e6f6fb' : lem ? '#efe48a' : '#e9dcae';
+    const b = B ? B.c : m ? MILK : lem ? '#efe48a' : syr ? '#f3e2b0' : '#dcedf2';
+    const clear = !B && !m;
+    if (this.liquidMat.transparent !== clear) {
+      this.liquidMat.transparent = clear;
+      this.liquidMat.depthWrite = !clear;
+      this.liquidMat.needsUpdate = true;
+    }
+    this.liquidMat.opacity = clear ? 0.38 : 1;
 
     let final = m ? mixHex(b, MILK, Math.min(0.8, B ? B.mk0 + B.mk1 * m : 1)) : syr ? mixHex(b, '#ffd27a', 0.03 * syr) : b;
     // Butterfly pea really does turn purple with lime; anything else only picks up a yellow cast.
@@ -449,7 +493,7 @@ export class DrinkStage {
       x.globalAlpha = 1;
       x.filter = 'none';
     }
-    if (s.base && mx < 0.5) {
+    if (B && mx < 0.5) {
       const r = rng(11);
       x.fillStyle = mixHex(b, '#000000', 0.55);
       x.globalAlpha = (1 - mx * 2) * 0.7;
@@ -477,7 +521,7 @@ export class DrinkStage {
     if (this.shellNow) this.servingG.remove(this.shellNow);
     this.shellNow = this.shells[id];
     this.servingG.add(this.shellNow);
-    this.servingG.scale.set(this.serveScale, this.serveScale, this.serveScale * (k === 'bag' ? 0.82 : 1));
+    this.servingG.scale.set(this.serveScale, this.serveScale, this.serveScale * (k !== 'cup' ? 0.82 : 1));
     if (this.level > 0.01) this.buildLiquid(this.level);
   }
 
@@ -514,11 +558,13 @@ export class DrinkStage {
 
   applyDrink(s: Drink, instant: boolean): void {
     this.paintLiquid(s);
-    const M = s.milk;
-    const has = s.base || M.cond + M.evap + M.syrup + M.soda + M.lemon > 0;
-    const amount = has ? (s.base ? 0.6 : 0) + M.cond * 0.065 + M.evap * 0.065 + M.syrup * 0.04 + M.soda * 0.08 + M.lemon * 0.03 : 0;
-    this.cupTarget = s.poured ? 0 : Math.min(0.88, amount);
-    this.levelTarget = s.poured && has ? Math.min(0.95, amount + ICE[s.ice].lv) : 0;
+    const ml = drinkMl(s);
+    this.cupTarget = s.poured ? 0 : Math.min(0.95, ml / CUP_ML_PER_LEVEL);
+    this.levelTarget = s.poured && ml > 0 ? Math.min(0.95, ml / SERVE_ML) : 0;
+    // Dry powder sits in a little heap until hot water goes in.
+    const powder = s.base && !s.poured && !baseDissolved(s) ? POWDER[s.base] : undefined;
+    this.powder.visible = powder !== undefined;
+    if (powder) this.powder.material.color.set(powder);
     this.cubes.forEach((c, i) => (c.visible = i < ICE[s.ice].k));
     this.setGarnish(s.garnish, instant);
     if (instant) {
@@ -537,10 +583,12 @@ export class DrinkStage {
     const has = this.level > 0.01;
     const floor = this.vesselFloor;
     const motion = reduceMotion ? 0 : 1;
+    // Ice is packed from the floor almost to the rim, so whatever is poured in fills the vessel.
+    const iceTop = floor + this.vesselRange * 0.9;
     this.cubes.forEach((c) => {
       const d = c.userData;
-      const cy = Math.max(floor + 0.3, (has ? y : floor + 0.3) - d.dy + motion * Math.sin(elapsed * 0.9 + d.p) * 0.012);
-      const r = Math.max(0, this.radiusAt(cy) * 0.68 - 0.2) * d.rf;
+      const cy = floor + 0.24 + d.layer * ((iceTop - floor - 0.24) / (ICE_LAYERS - 1));
+      const r = Math.max(0, this.radiusAt(cy) * 0.62 - 0.18) * d.rf;
       c.position.set(Math.cos(d.a) * r, cy, Math.sin(d.a) * r);
     });
     if (this.garnishObj && this.garnishObj.userData.float !== undefined) {

@@ -15,17 +15,10 @@
     <canvas id="gl" aria-label="เครื่องดื่มสามมิติบนเคาน์เตอร์หินขัด"></canvas>
     <canvas id="garland" aria-hidden="true"></canvas>
     <div id="top">
-      <div id="brand"><small>ชงหวานหวาน · รถเข็นหน้าโรงเรียน</small><b>ออเดอร์ที่ <span id="order-no">1</span></b></div>
+      <div id="brand"><small>ชงหวานหวาน · รถเข็นหน้าโรงเรียน</small><b>เสิร์ฟแล้ว <span id="order-no">0</span> แก้ว</b></div>
       <div id="money"><span id="money-n">0</span> บาท</div>
     </div>
-    <aside id="ticket">
-      <div id="photo"><div class="in"><img id="target" alt="ภาพเครื่องดื่มที่ลูกค้าสั่ง"><div id="seal">สั่ง</div></div></div>
-      <div id="slip">
-        <div id="order-name"></div>
-        <div id="who"><div id="avatar" aria-hidden="true"></div><div id="quote"></div></div>
-        <div id="recipe"></div>
-      </div>
-    </aside>
+    <aside id="orders" aria-label="ออเดอร์ที่รออยู่"></aside>
     <div id="tag" hidden></div>
     <section id="hud" aria-live="polite">
       <div id="stir" hidden>
@@ -37,9 +30,9 @@
     </section>
     <div id="actions">
       <button type="button" class="ghost" id="reset" hidden>เทใหม่</button>
-      <button type="button" class="pill" id="spoon-done" hidden>วางช้อน</button>
-      <button type="button" class="pill" id="serve" hidden>เสิร์ฟ</button>
     </div>
+    <button type="button" class="pill under-glass" id="spoon-done" hidden>คนเสร็จ วางช้อน</button>
+    <button type="button" class="pill under-glass" id="serve" hidden>เสร็จ แขวนรอส่ง</button>
     <section id="result-card" hidden></section>
     <section id="unsupported" role="alert">
       <img src="/favicon.svg" alt="" width="64" height="64">

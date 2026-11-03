@@ -1,8 +1,8 @@
 export type BaseId = 'tea' | 'black' | 'green' | 'coffee' | 'pea' | 'red';
-export type AddId = 'cond' | 'evap' | 'syrup' | 'soda' | 'lemon';
+export type AddId = 'hot' | 'cond' | 'evap' | 'syrup' | 'soda' | 'lemon';
 export type IceId = 'none' | 'little' | 'normal' | 'lots';
 export type GarnishId = 'none' | 'straw' | 'lime' | 'mint' | 'pea' | 'marigold';
-export type VesselId = 'cup' | 'bag';
+export type VesselId = 'cup' | 'carrier';
 export type Additions = Record<AddId, number>;
 
 export interface Drink {
@@ -42,6 +42,7 @@ export const BASE: Record<BaseId, { n: string; c: string; stream: string; milk: 
 };
 
 export const ADD: Record<AddId, string> = {
+  hot: 'น้ำร้อน',
   cond: 'นมข้นหวาน',
   evap: 'นมระเหย',
   syrup: 'น้ำเชื่อม',
@@ -55,7 +56,7 @@ export const ICE: Record<IceId, { n: string; k: number; lv: number }> = {
   none: { n: 'ไม่ใส่', k: 0, lv: 0 },
   little: { n: 'น้อย', k: 3, lv: 0.03 },
   normal: { n: 'ปกติ', k: 5, lv: 0.06 },
-  lots: { n: 'เยอะ', k: 8, lv: 0.09 },
+  lots: { n: 'เยอะ', k: 18, lv: 0.09 },
 };
 
 export const GARNISH: Record<GarnishId, string> = {
@@ -67,10 +68,12 @@ export const GARNISH: Record<GarnishId, string> = {
   marigold: 'ดอกดาวเรือง',
 };
 
-export const VESSEL: Record<VesselId, string> = { cup: 'แก้วพลาสติก', bag: 'ถุงพลาสติก' };
+export const VESSEL: Record<VesselId, string> = { cup: 'แก้วพลาสติก', carrier: 'ถุงหิ้วกระดาษ' };
+/** How the order ticket says each vessel. */
+export const VESSEL_ASK: Record<VesselId, string> = { cup: 'ใส่แก้ว', carrier: 'ใส่ถุงหิ้ว' };
+/** Vessels come out of the cooler already packed with this much ice. */
+export const COOLER_ICE: IceId = 'lots';
 
-/** Each drop of ice from the bucket moves the drink one step along this list. */
-export const ICE_STEPS: IceId[] = ['none', 'little', 'normal', 'lots'];
 
 /** A full mix takes this many turns of the spoon. */
 export const STIR_TURNS = 12;
@@ -78,7 +81,23 @@ export const STIR_TURNS = 12;
 export const STIR_MAX = 3;
 export const MAX_PER_ADDITION = 4;
 
-export const noAdditions = (): Additions => ({ cond: 0, evap: 0, syrup: 0, soda: 0, lemon: 0 });
+export const noAdditions = (): Additions => ({ hot: 0, cond: 0, evap: 0, syrup: 0, soda: 0, lemon: 0 });
+/** Tea and coffee bases are dry powder: they colour the hot water but add no volume of their own. */
+export const BREWED: BaseId[] = ['tea', 'black', 'green', 'coffee'];
+/** Colour of each powder sitting dry in the bottom of the glass. */
+export const POWDER: Partial<Record<BaseId, string>> = { tea: '#e2742a', black: '#5a2e16', green: '#7faf3c', coffee: '#3b2416' };
+/** Volume each pour adds. The butterfly pea and red syrups are concentrates, so a pour is small. */
+export const ML_PER_POUR: Record<AddId, number> = { hot: 100, cond: 30, evap: 30, syrup: 15, soda: 60, lemon: 10 };
+export const CONCENTRATE_ML = 40;
+
+/** Total liquid in the drink. Powder adds nothing. */
+export function drinkMl(d: Drink): number {
+  const base = d.base && !BREWED.includes(d.base) ? CONCENTRATE_ML : 0;
+  return base + ADD_IDS.reduce((sum, k) => sum + d.milk[k] * ML_PER_POUR[k], 0);
+}
+
+/** True once the powder in the glass has been dissolved by hot water, or the base was liquid to begin with. */
+export const baseDissolved = (d: Drink) => d.base !== null && (!BREWED.includes(d.base) || d.milk.hot > 0);
 
 export const blankDrink = (): Drink => ({
   base: null,
@@ -90,22 +109,22 @@ export const blankDrink = (): Drink => ({
   poured: false,
 });
 
-type OrderSpec = Omit<Order, 'milk'> & { milk: Partial<Additions> };
+type OrderSpec = Omit<Order, 'milk' | 'ice'> & { milk: Partial<Additions> };
 
 const ORDER_SPECS: OrderSpec[] = [
-  { name: 'ชาเย็น หวานน้อย', who: 'ป้าแจ่ม', skin: '#e7b58e', hair: '#6b6b6b', top: '#c0392b', quote: 'ชาเย็นใส่ถุงนะลูก หวานน้อย น้ำแข็งเยอะๆ ขอหลอดด้วย', base: 'tea', milk: { cond: 1, evap: 1 }, ice: 'lots', garnish: 'straw', vessel: 'bag' },
-  { name: 'โอเลี้ยง หวานปกติ', who: 'ลุงวิน', skin: '#b98258', hair: '#231c17', top: '#d97a1c', quote: 'โอเลี้ยงเข้มๆ ใส่ถุง น้ำแข็งปกติ ไม่ต้องแต่งอะไร รีบครับ', base: 'coffee', milk: { syrup: 2 }, ice: 'normal', garnish: 'none', vessel: 'bag' },
-  { name: 'นมชมพู หวานมาก', who: 'น้องมิ้น', skin: '#f3cba8', hair: '#2a1b12', top: '#f6f6f6', quote: 'นมชมพูใส่แก้วค่ะ หวานๆ น้ำแข็งปกติ ขอดอกดาวเรืองถ่ายรูปด้วย', base: 'red', milk: { cond: 3, evap: 1 }, ice: 'normal', garnish: 'marigold', vessel: 'cup' },
-  { name: 'อัญชันมะนาว', who: 'พี่ออฟฟิศ', skin: '#eabf98', hair: '#17110d', top: '#35577f', quote: 'อัญชันมะนาวใส่แก้ว หวานน้อย น้ำแข็งเยอะ ขอมะนาวฝานด้วยครับ', base: 'pea', milk: { syrup: 1, lemon: 1 }, ice: 'lots', garnish: 'lime', vessel: 'cup' },
-  { name: 'ชาเขียวนม', who: 'น้องแพร', skin: '#f0c8a4', hair: '#3a2415', top: '#ffffff', quote: 'ชาเขียวนมใส่แก้วค่ะ หวานปกติ น้ำแข็งปกติ แต่งใบสะระแหน่ให้หน่อย', base: 'green', milk: { cond: 2, evap: 1 }, ice: 'normal', garnish: 'mint', vessel: 'cup' },
-  { name: 'น้ำแดงโซดา', who: 'เฮียเล็ก', skin: '#ecc6a2', hair: '#1b1512', top: '#2f8f6b', quote: 'น้ำแดงโซดาใส่แก้ว ซ่าๆ เลย หวานน้อย น้ำแข็งเยอะ ขอหลอดด้วย', base: 'red', milk: { syrup: 1, soda: 2 }, ice: 'lots', garnish: 'straw', vessel: 'cup' },
-  { name: 'ชามะนาว', who: 'พี่ส้ม', skin: '#d9a67c', hair: '#2a1a10', top: '#e0a12b', quote: 'ชามะนาวใส่แก้วจ้ะ เปรี้ยวๆ หวานปกติ น้ำแข็งปกติ ขอมะนาวฝาน', base: 'black', milk: { syrup: 2, lemon: 2 }, ice: 'normal', garnish: 'lime', vessel: 'cup' },
-  { name: 'ชาดำเย็น', who: 'ลุงชัย', skin: '#b5825a', hair: '#8a8a8a', top: '#3f5e8c', quote: 'ชาดำเย็นใส่ถุง หวานปกติ ไม่ใส่นม น้ำแข็งเยอะ ไม่ต้องแต่ง', base: 'black', milk: { syrup: 2 }, ice: 'lots', garnish: 'none', vessel: 'bag' },
-  { name: 'กาแฟเย็น', who: 'พี่ฟ้า', skin: '#f0c8a4', hair: '#20140e', top: '#7c4dab', quote: 'กาแฟเย็นใส่แก้วค่ะ นมเยอะหน่อย หวานปกติ น้ำแข็งเยอะ ขอหลอด', base: 'coffee', milk: { cond: 2, evap: 2 }, ice: 'lots', garnish: 'straw', vessel: 'cup' },
-  { name: 'กาแฟโบราณ', who: 'ตาบุญ', skin: '#b98a60', hair: '#d8d8d8', top: '#6b8e4e', quote: 'กาแฟโบราณใส่ถุง ใส่นมข้นอย่างเดียว น้ำแข็งปกติ ขอหลอดด้วย', base: 'coffee', milk: { cond: 2 }, ice: 'normal', garnish: 'straw', vessel: 'bag' },
+  { name: 'ชาเย็น หวานน้อย', who: 'ป้าแจ่ม', skin: '#e7b58e', hair: '#6b6b6b', top: '#c0392b', quote: 'ชาเย็นใส่ถุงหิ้วนะลูก หวานน้อย ขอหลอดด้วย', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'carrier' },
+  { name: 'โอเลี้ยง หวานปกติ', who: 'ลุงวิน', skin: '#b98258', hair: '#231c17', top: '#d97a1c', quote: 'โอเลี้ยงเข้มๆ ใส่ถุงหิ้ว ไม่เอาหลอด รีบครับ', base: 'coffee', milk: { hot: 1, syrup: 2 }, garnish: 'none', vessel: 'carrier' },
+  { name: 'นมชมพู หวานมาก', who: 'น้องมิ้น', skin: '#f3cba8', hair: '#2a1b12', top: '#f6f6f6', quote: 'นมชมพูใส่แก้วค่ะ หวานๆ ขอหลอดด้วย', base: 'red', milk: { cond: 3, evap: 1 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'อัญชันมะนาว', who: 'พี่ออฟฟิศ', skin: '#eabf98', hair: '#17110d', top: '#35577f', quote: 'อัญชันมะนาวใส่แก้ว หวานน้อย ขอหลอดครับ', base: 'pea', milk: { syrup: 1, lemon: 1 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'ชาเขียวนม', who: 'น้องแพร', skin: '#f0c8a4', hair: '#3a2415', top: '#ffffff', quote: 'ชาเขียวนมใส่ถุงหิ้วค่ะ หวานปกติ ขอหลอดด้วย', base: 'green', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'carrier' },
+  { name: 'น้ำแดงโซดา', who: 'เฮียเล็ก', skin: '#ecc6a2', hair: '#1b1512', top: '#2f8f6b', quote: 'น้ำแดงโซดาใส่แก้ว ซ่าๆ หวานน้อย ขอหลอดด้วย', base: 'red', milk: { syrup: 1, soda: 2 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'ชามะนาว', who: 'พี่ส้ม', skin: '#d9a67c', hair: '#2a1a10', top: '#e0a12b', quote: 'ชามะนาวใส่แก้วจ้ะ เปรี้ยวๆ หวานปกติ ไม่เอาหลอด', base: 'black', milk: { hot: 1, syrup: 2, lemon: 2 }, garnish: 'none', vessel: 'cup' },
+  { name: 'ชาดำเย็น', who: 'ลุงชัย', skin: '#b5825a', hair: '#8a8a8a', top: '#3f5e8c', quote: 'ชาดำเย็นใส่ถุงหิ้ว หวานปกติ ไม่ใส่นม ไม่เอาหลอด', base: 'black', milk: { hot: 1, syrup: 2 }, garnish: 'none', vessel: 'carrier' },
+  { name: 'กาแฟเย็น', who: 'พี่ฟ้า', skin: '#f0c8a4', hair: '#20140e', top: '#7c4dab', quote: 'กาแฟเย็นใส่แก้วค่ะ นมเยอะหน่อย หวานปกติ ขอหลอด', base: 'coffee', milk: { hot: 1, cond: 2, evap: 2 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'กาแฟโบราณ', who: 'ตาบุญ', skin: '#b98a60', hair: '#d8d8d8', top: '#6b8e4e', quote: 'กาแฟโบราณใส่ถุงหิ้ว ใส่นมข้นอย่างเดียว ขอหลอดด้วย', base: 'coffee', milk: { hot: 1, cond: 2 }, garnish: 'straw', vessel: 'carrier' },
 ];
 
-export const ORDERS: Order[] = ORDER_SPECS.map((o) => ({ ...o, milk: { ...noAdditions(), ...o.milk } }));
+export const ORDERS: Order[] = ORDER_SPECS.map((o) => ({ ...o, ice: COOLER_ICE, milk: { ...noAdditions(), ...o.milk } }));
 
 export function recipeOf(o: Order): string {
   const added = ADD_IDS.filter((k) => o.milk[k]).map((k) => ADD[k] + (o.milk[k] > 1 ? ' ×' + o.milk[k] : ''));
@@ -134,11 +153,10 @@ export function score(s: Drink, o: Order): Score {
   const addsRight = ADD_IDS.filter((k) => s.milk[k] === o.milk[k]).length;
   const rows: ScoreRow[] = [
     { label: 'น้ำฐาน', got: s.base === o.base ? 25 : 0, max: 25 },
-    { label: 'ส่วนผสมที่เติม', got: addsRight * 6, max: 30 },
+    { label: 'ส่วนผสมที่เติม', got: addsRight * 5, max: 30 },
     { label: 'คนให้เข้ากัน', got: Math.round(s.mix * 10), max: 10 },
-    { label: 'ภาชนะ', got: s.vessel === o.vessel ? 10 : 0, max: 10 },
-    { label: 'น้ำแข็ง', got: s.ice === o.ice ? 15 : 0, max: 15 },
-    { label: 'ของแต่ง', got: s.garnish === o.garnish ? 10 : 0, max: 10 },
+    { label: 'ภาชนะ', got: s.vessel === o.vessel ? 20 : 0, max: 20 },
+    { label: 'หลอด', got: s.garnish === o.garnish ? 15 : 0, max: 15 },
   ];
   const total = rows.reduce((sum, r) => sum + r.got, 0);
   const pay = total >= 100 ? 45 : total >= 70 ? 30 : total >= 40 ? 15 : 0;
