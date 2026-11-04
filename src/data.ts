@@ -56,7 +56,7 @@ export const BASE: Record<BaseId, { n: string; c: string; stream: string; milk: 
 export const ADD: Record<AddId, string> = {
   hot: 'น้ำร้อน',
   cond: 'นมข้นหวาน',
-  evap: 'นมระเหย',
+  evap: 'คาร์เนชั่น',
   syrup: 'น้ำเชื่อม',
   soda: 'โซดา',
   lemon: 'น้ำมะนาว',

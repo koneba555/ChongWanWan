@@ -50,9 +50,9 @@ const HOLD_PLANE = new T.Plane(new T.Vector3(0, 0, 1), -0.2);
 /** How far from a spot, as a share of the screen height, a drop still lands on it. */
 const DROP_REACH = 0.17;
 const CLICK_DRIFT = 6;
-/** The cooler stands on the floor at the front right, big and partly out of frame. */
-const COOLER_AT = new T.Vector3(5.2, -0.9, 3.3);
-const COOLER_SCALE = 1.9;
+/** The cooler sits on the counter at the front right, small enough to leave the right side of the table in view. */
+const COOLER_AT = new T.Vector3(4.5, 0.02, 2.35);
+const COOLER_SCALE = 1.1;
 /** Spots on the tray where finished drinks wait to be handed over. */
 /** Finished drinks hang in carry bags from S hooks on a rail at the top right. */
 const RAIL_Y = 3.35;
@@ -64,7 +64,11 @@ const HANG_SCALE = 0.42;
 /** Hot water pot on its plate, where the waiting tray used to be. */
 const HOT_POT = new T.Vector3(-3.55, 0.07, 0.9);
 /** Cup by the condensed milk that the spoon and straw stand in. */
-const UTENSIL_CUP = new T.Vector3(2.75, 0.02, -1.3);
+const UTENSIL_CUP = new T.Vector3(3.7, 0.02, 0.6);
+/** A low wooden step in front of the shelf lifts the small bottles and cans above whatever stands before them. */
+const STEP_Y = 0.45;
+const STEP_Z = -1.62;
+const STEPS: [number, number][] = [[-2.62, 0.82], [3.07, 1.55]];
 const LID_OPEN = -1.95;
 
 const hitMaterial = new T.MeshBasicMaterial({ visible: false });
@@ -85,7 +89,7 @@ const BASE_MODELS: Record<ShelfBase, () => T.Object3D> = {
 const EXTRA_SHELF_X: Partial<Record<BaseId, number>> = { cocoa: -3.99, matcha: 3.99 };
 const ADD_MODELS: Record<AddId, () => T.Object3D> = {
   cond: () => makeCan('นมข้น', '#f4ecd8', '#1d5aa8'),
-  evap: () => makeCan('นมระเหย', '#c8342f', '#fff'),
+  evap: () => makeCan('คาร์เนชั่น', '#c8342f', '#fff'),
   syrup: () => makeBottle('น้ำเชื่อม', '#e8c77a'),
   soda: makeSodaBottle,
   hot: makeHotPot,
@@ -175,8 +179,15 @@ export class Table {
   private setOut(): void {
     (Object.keys(BASE_MODELS) as ShelfBase[]).forEach((k, i) => this.add('base', k, BASE[k].n, BASE_MODELS[k](), EXTRA_SHELF_X[k] ?? -2.85 + i * 1.14, SHELF_Y, SHELF_Z, 0.8));
     // Everything stays off the mat, in a group on each side of the glasses.
-    const addAt: Record<AddId, [number, number]> = { soda: [-2.75, -1.5], syrup: [-3.6, -1.5], lemon: [-4.45, -1.5], cond: [3.45, -1.5], evap: [4.25, -1.5], hot: [HOT_POT.x, HOT_POT.z] };
-    ADD_IDS.forEach((k) => this.add('add', k, ADD[k], ADD_MODELS[k](), addAt[k][0], k === 'hot' ? HOT_POT.y : 0.02, addAt[k][1], k === 'hot' ? 0.8 : 0.72));
+    const stepMat = new T.MeshStandardMaterial({ color: 0x8e5a30, roughness: 0.55, envMapIntensity: 0.8 });
+    STEPS.forEach(([x, w]) => {
+      const step = new T.Mesh(new T.BoxGeometry(w, STEP_Y, 1.1), stepMat);
+      step.position.set(x, STEP_Y / 2, STEP_Z);
+      this.stage.tableG.add(step);
+    });
+    const onStep = STEP_Y + 0.02;
+    const addAt: Record<AddId, [number, number, number]> = { syrup: [-2.62, onStep, STEP_Z], soda: [-2.7, 0.02, 1.35], lemon: [-3.75, 0.02, 2.75], cond: [2.7, onStep, STEP_Z], evap: [3.45, onStep, STEP_Z], hot: [HOT_POT.x, HOT_POT.y, HOT_POT.z] };
+    ADD_IDS.forEach((k) => this.add('add', k, ADD[k], ADD_MODELS[k](), addAt[k][0], addAt[k][1], addAt[k][2], k === 'hot' ? 0.8 : 0.72));
 
     const holder = makeUtensilCup();
     holder.position.copy(UTENSIL_CUP);
@@ -191,10 +202,10 @@ export class Table {
     this.add('cooler', 'cooler', 'ถังแช่', cooler.model, COOLER_AT.x, COOLER_AT.y, COOLER_AT.z, COOLER_SCALE);
     // The vessels wait inside the cooler and rise out above it when it opens.
     const vessels: [VesselId, () => T.Object3D, number, number][] = [
-      ['cup', () => makeVesselStack(() => buildShell('cup', false), 2, 0.28), 3.55, 0.36],
-      ['carrier', () => buildShell('carrier', true), 4.65, 0.34],
+      ['cup', () => makeVesselStack(() => buildShell('cup', false), 2, 0.28), COOLER_AT.x - 0.6, 0.36],
+      ['carrier', () => buildShell('carrier', true), COOLER_AT.x + 0.35, 0.34],
     ];
-    vessels.forEach(([k, model, x, sc]) => this.add('vessel', k, VESSEL[k], model(), x, 1.95, 2.75, sc));
+    vessels.forEach(([k, model, x, sc]) => this.add('vessel', k, VESSEL[k], model(), x, 1.75, COOLER_AT.z - 0.1, sc));
     this.setCooler(false);
 
     const plate = makePlate(0.85);
@@ -209,16 +220,16 @@ export class Table {
     this.stage.tableG.add(plate, rail, rail4);
 
     // Upgrades are set out now and hidden until bought.
-    const frother = this.add('frother', 'frother', 'เครื่องตีฟองนม', makeFrother(), UTENSIL_CUP.x + 0.1, 0.02, UTENSIL_CUP.z + 0.95, 0.6);
+    const frother = this.add('frother', 'frother', 'เครื่องตีฟองนม', makeFrother(), 2.85, 0.02, -0.35, 0.6);
     const kettle = this.add('add', 'hot', 'กระติกน้ำร้อน (กดปุ่ม)', makeThermoPot(), HOT_POT.x, HOT_POT.y, HOT_POT.z, 0.72);
     kettle.press = true;
-    const lime = this.add('add', 'lemon', 'มะนาวแป้นสด', makeLimeBowl(), -4.45, 0.02, -1.5, 0.75);
+    const lime = this.add('add', 'lemon', 'มะนาวแป้นสด', makeLimeBowl(), -3.75, 0.02, 2.75, 0.75);
     const find = (kind: ItemKind, key: string, not: TableItem) => this.items.find((i) => i.kind === kind && i.key === key && i !== not) as TableItem;
     const pearl = this.add('topping', 'pearl', 'ไข่มุกบุก (ตักใส่ภาชนะ)', makePearlBowl(), 2.9, 0.02, 3.2, 0.62);
     this.upgradeItems.frother = { on: [frother], off: [] };
     this.upgradeItems.pearl = { on: [pearl], off: [] };
     const whip = this.add('topping', 'whip', 'วิปครีม (โปะหน้าแก้ว)', makeWhipCan(), 2.05, 0.02, 3.35, 0.55);
-    const sealer = this.add('sealer', 'sealer', 'เครื่องซีลฝา (กดเพื่อซีล)', makeSealer(), 3.05, 0.02, 1.85, 0.7);
+    const sealer = this.add('sealer', 'sealer', 'เครื่องซีลฝา (กดเพื่อซีล)', makeSealer(), 4.3, 0.02, -1.85, 0.62);
     sealer.press = true;
     this.upgradeItems.whip = { on: [whip], off: [] };
     this.upgradeItems.sealer = { on: [sealer], off: [] };
@@ -228,7 +239,7 @@ export class Table {
     qr.scale.setScalar(0.75);
     this.stage.tableG.add(qr);
     this.upgradeProps.qr = { on: [qr], off: [] };
-    const espresso = this.add('base', 'espresso', 'เครื่องเอสเพรสโซ่ (กดชงช็อต)', makeEspressoMachine(), -3.65, 0.02, 2.95, 0.72);
+    const espresso = this.add('base', 'espresso', 'เครื่องเอสเพรสโซ่ (กดชงช็อต)', makeEspressoMachine(), -3.75, 0.02, -1.8, 0.64);
     espresso.press = true;
     this.upgradeItems.espresso = { on: [espresso], off: [] };
     (['cocoa', 'matcha'] as const).forEach((k) => (this.upgradeItems[k] = { on: [this.find('base', k) as TableItem], off: [] }));
@@ -303,8 +314,21 @@ export class Table {
     const ndc = new T.Vector2((this.pointerX / r.width) * 2 - 1, -(this.pointerY / r.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.stage.camera);
     const pickable = this.items.filter((i) => i.state === 'idle' && this.rules.canPick(i));
-    const hit = this.raycaster.intersectObjects(pickable.map((i) => i.proxy), false)[0];
-    return hit ? pickable.find((i) => i.proxy === hit.object) ?? null : null;
+    const hits = this.raycaster.intersectObjects(pickable.map((i) => i.proxy), false);
+    // Hit boxes can overlap on screen, so the item whose middle is nearest the pointer wins over the front-most box.
+    let best: TableItem | null = null;
+    let bestDist = Infinity;
+    for (const h of hits) {
+      const item = pickable.find((i) => i.proxy === h.object);
+      if (!item) continue;
+      const mid = item.proxy.getWorldPosition(new T.Vector3()).project(this.stage.camera);
+      const d = Math.hypot(mid.x - ndc.x, (mid.y - ndc.y) * (r.height / r.width));
+      if (d < bestDist) {
+        bestDist = d;
+        best = item;
+      }
+    }
+    return best;
   }
 
   private targetAtPointer(item: TableItem): DropTarget | null {

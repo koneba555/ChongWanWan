@@ -102,6 +102,10 @@ const ICE_LAYERS = 6;
 const cupY = (L: number) => CUP_FLOOR + L * 1.5;
 const rCup = (y: number) => 0.63 + (y / 1.72) * 0.13;
 const BUBBLES = 70;
+/** Width of the table and its things, and their middle, which the camera keeps in view. */
+const SCENE_W = 10.8;
+const SCENE_CX = 0.7;
+
 /** Tapioca pearls sit in rings on the vessel floor, pressed against the wall where they show. */
 const PEARL_RINGS = [12, 11, 9];
 
@@ -175,6 +179,8 @@ export class DrinkStage {
   private parX = 0;
   private parY = 0;
   private camDist = 9;
+  /** Where the camera looks across, so the table sits in the space the order cards leave free. */
+  private viewX = 0;
 
   /** Mix value the liquid texture was last painted with. */
   paintedMix = -1;
@@ -785,8 +791,8 @@ export class DrinkStage {
 
   /** Looks down across the table from slightly above. */
   private placeCamera(): void {
-    this.camera.position.set(this.parX, 6.4 + this.parY, this.camDist);
-    this.camera.lookAt(0, 0.95, 0.45);
+    this.camera.position.set(this.viewX + this.parX, 6.4 + this.parY, this.camDist);
+    this.camera.lookAt(this.viewX, 0.95, 0.45);
   }
 
   /** Keeps the whole table in frame at any window shape. */
@@ -799,9 +805,13 @@ export class DrinkStage {
     this.renderer.setSize(w, h, false);
     this.renderer.setClearColor(0, 1);
     const aspect = w / h;
-    const viewH = Math.max(6.5, 12.6 / aspect);
+    // The order cards cover the left of the canvas, so the table is fitted into the rest.
+    const panel = document.getElementById('orders')?.getBoundingClientRect();
+    const left = panel && panel.width ? Math.max(0, Math.min(w * 0.4, panel.right - stage.getBoundingClientRect().left + 8)) : 0;
+    const viewH = Math.max(6.5, SCENE_W / ((w - left) / h));
     this.camera.aspect = aspect;
     this.camDist = viewH / (2 * Math.tan((15 * Math.PI) / 180));
+    this.viewX = SCENE_CX - (left / 2) * ((viewH * aspect) / w);
     this.placeCamera();
     this.camera.updateProjectionMatrix();
     // Cover-fit the background the way CSS background-size: cover would.
