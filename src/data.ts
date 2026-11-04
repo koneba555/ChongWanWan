@@ -1,4 +1,4 @@
-export type BaseId = 'tea' | 'black' | 'green' | 'coffee' | 'pea' | 'red' | 'cocoa' | 'matcha';
+export type BaseId = 'tea' | 'black' | 'green' | 'coffee' | 'pea' | 'red' | 'cocoa' | 'matcha' | 'espresso';
 export type AddId = 'hot' | 'cond' | 'evap' | 'syrup' | 'soda' | 'lemon';
 export type IceId = 'none' | 'little' | 'normal' | 'lots';
 export type GarnishId = 'none' | 'straw' | 'lime' | 'mint' | 'pea' | 'marigold';
@@ -50,6 +50,7 @@ export const BASE: Record<BaseId, { n: string; c: string; stream: string; milk: 
   red: { n: 'น้ำแดง', c: '#e01f3d', stream: '#c21c33', milk: '#fff0ea', mk0: 0.28, mk1: 0.07 },
   cocoa: { n: 'โกโก้', c: '#5a2f1a', stream: '#4a2414', milk: '#d9b08c', mk0: 0.24, mk1: 0.12 },
   matcha: { n: 'มัทฉะ', c: '#3f7d2a', stream: '#356b22', milk: '#d3e6b4', mk0: 0.2, mk1: 0.12 },
+  espresso: { n: 'เอสเพรสโซ่', c: '#3b1d0e', stream: '#2a140a', milk: '#e6c49a', mk0: 0.26, mk1: 0.13 },
 };
 
 export const ADD: Record<AddId, string> = {
@@ -150,14 +151,20 @@ const ORDER_SPECS: OrderSpec[] = [
   { name: 'ชาเย็น ซีลฝา', who: 'ไรเดอร์ต้น', skin: '#c99068', hair: '#17110d', top: '#2a9d8f', quote: 'ไรเดอร์รับออเดอร์ครับ ชาเย็นใส่แก้ว ซีลฝาให้ด้วย หวานน้อย ขอหลอด', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'cup', sealed: true },
   { name: 'กาแฟเย็น ซีลฝา', who: 'ไรเดอร์ฝน', skin: '#e9bf98', hair: '#2a1a10', top: '#e76f51', quote: 'ไรเดอร์ค่ะ กาแฟเย็นใส่แก้วซีลฝา นมเยอะ หวานปกติ ขอหลอด', base: 'coffee', milk: { hot: 1, cond: 2, evap: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
   { name: 'น้ำแดงโซดา ซีลฝา', who: 'ไรเดอร์โจ้', skin: '#b98258', hair: '#231c17', top: '#2a9d8f', quote: 'ไรเดอร์ครับ น้ำแดงโซดาใส่แก้วซีลฝา หวานน้อย ขอหลอด', base: 'red', milk: { syrup: 1, soda: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
+  // Phase 4: shots pulled on the espresso machine.
+  { name: 'เอสเพรสโซ่เย็น', who: 'พี่โอ๊ต', skin: '#d9a67c', hair: '#17110d', top: '#1d3557', quote: 'เอสเพรสโซ่เย็นใส่แก้วครับ หวานปกติ ขอหลอดด้วย', base: 'espresso', milk: { cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'ลาเต้เย็น', who: 'พี่จูน', skin: '#f3d0ae', hair: '#5a3a22', top: '#e9c46a', quote: 'ลาเต้เย็นใส่แก้วค่ะ นมเยอะ หวานน้อย ขอหลอด', base: 'espresso', milk: { syrup: 1, evap: 2 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'อเมริกาโน่เย็น', who: 'คุณหมอปิง', skin: '#f0c8a4', hair: '#20140e', top: '#a8dadc', quote: 'อเมริกาโน่เย็นใส่แก้ว ไม่หวาน ไม่เอาหลอดครับ', base: 'espresso', milk: { hot: 1 }, garnish: 'none', vessel: 'cup' },
+  { name: 'อเมริกาโน่มะนาว', who: 'พี่กิ๊ฟ', skin: '#e9bf98', hair: '#2a1a10', top: '#90be6d', quote: 'อเมริกาโน่มะนาวใส่แก้วค่ะ หวานน้อย เปรี้ยวนิดๆ ขอหลอด', base: 'espresso', milk: { hot: 1, syrup: 1, lemon: 1 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'ลาเต้เย็น ซีลฝา', who: 'ไรเดอร์แบม', skin: '#c99068', hair: '#231c17', top: '#2a9d8f', quote: 'ไรเดอร์ค่ะ ลาเต้เย็นใส่แก้วซีลฝา นมเยอะ หวานน้อย ขอหลอด', base: 'espresso', milk: { syrup: 1, evap: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
 ];
 
 export const ORDERS: Order[] = ORDER_SPECS.map((o) => ({ ...o, ice: COOLER_ICE, pearls: o.pearls ?? false, whip: o.whip ?? false, sealed: o.sealed ?? false, milk: { ...noAdditions(), ...o.milk } }));
 
-/** A cup sells for this much, more for premium powders and pearls. */
+/** A cup sells for this much, more for premium bases and extras. */
 const PRICE = 45;
-const PREMIUM: BaseId[] = ['cocoa', 'matcha'];
-export const orderPrice = (o: Order) => PRICE + (PREMIUM.includes(o.base) ? 10 : 0) + (o.pearls ? 10 : 0) + (o.whip ? 10 : 0) + (o.sealed ? 5 : 0);
+const PREMIUM: Partial<Record<BaseId, number>> = { cocoa: 10, matcha: 10, espresso: 20 };
+export const orderPrice = (o: Order) => PRICE + (PREMIUM[o.base] ?? 0) + (o.pearls ? 10 : 0) + (o.whip ? 10 : 0) + (o.sealed ? 5 : 0);
 
 export function recipeOf(o: Order): string {
   const added = ADD_IDS.filter((k) => o.milk[k]).map((k) => ADD[k] + (o.milk[k] > 1 ? ' ×' + o.milk[k] : ''));

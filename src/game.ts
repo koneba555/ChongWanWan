@@ -163,7 +163,9 @@ export function startGame(stage: DrinkStage): void {
       if (!drink.base) {
         return trayCount()
           ? 'ลากถุงที่แขวนรอส่งด้านบนไปวางบนตั๋วของลูกค้าที่สั่ง หรือเริ่มชงแก้วใหม่'
-          : 'เลือกออเดอร์ทางซ้าย แล้วลากน้ำฐานมาใส่แก้วตวง';
+          : owned.has('espresso') && waiting.some((c) => c?.order.base === 'espresso')
+            ? 'เลือกออเดอร์ทางซ้าย แล้วลากน้ำฐานมาใส่แก้วตวง เมนูเอสเพรสโซ่ให้กดที่เครื่องชงด้านซ้ายหน้า'
+            : 'เลือกออเดอร์ทางซ้าย แล้วลากน้ำฐานมาใส่แก้วตวง';
       }
       if (BREWED.includes(drink.base) && !drink.milk.hot) {
         return owned.has('kettle') ? 'ชา กาแฟ ต้องชงกับน้ำร้อน กดที่กระติกน้ำร้อนด้านซ้าย' : 'ชา กาแฟ ต้องชงกับน้ำร้อน ลากกาน้ำร้อนด้านซ้ายมาเทลงแก้วตวง';
@@ -350,6 +352,19 @@ export function startGame(stage: DrinkStage): void {
         addToGlass('hot');
         return;
       }
+      // The espresso machine pulls a shot straight into the measuring glass.
+      if (item.key === 'espresso') {
+        if (drink.poured) say('เทลงภาชนะไปแล้ว ถ้าจะเติมต้องกดเทใหม่');
+        else if (drink.base === 'espresso') say('ชงช็อตเอสเพรสโซ่ลงแก้วตวงแล้ว');
+        else {
+          drink.base = 'espresso';
+          drink.mix *= 0.4;
+          stage.pour(BASE.espresso.stream);
+          stage.applyDrink(drink, false);
+          updateHud();
+        }
+        return;
+      }
       // The sealer presses film onto the poured cup on the mat.
       if (item.key !== 'sealer') return;
       if (!drink.poured || drink.vessel !== 'cup') say('ซีลได้เฉพาะแก้วพลาสติกที่เทน้ำแล้ว');
@@ -395,7 +410,7 @@ export function startGame(stage: DrinkStage): void {
   /** Picks a customer who isn't already waiting, when there are enough to choose from. */
   /** Menus that need a bought powder or topping only come up once the cart has it. */
   const canMake = (o: Order) =>
-    (o.base !== 'cocoa' || owned.has('cocoa')) && (o.base !== 'matcha' || owned.has('matcha')) && (!o.pearls || owned.has('pearl')) && (!o.whip || owned.has('whip')) && (!o.sealed || owned.has('sealer'));
+    (o.base !== 'cocoa' || owned.has('cocoa')) && (o.base !== 'matcha' || owned.has('matcha')) && (o.base !== 'espresso' || owned.has('espresso')) && (!o.pearls || owned.has('pearl')) && (!o.whip || owned.has('whip')) && (!o.sealed || owned.has('sealer'));
 
   function newOrder(): Order {
     const here = waiting.filter((c): c is Customer => c !== null).map((c) => c.order);
@@ -750,6 +765,7 @@ export function startGame(stage: DrinkStage): void {
       'dev-pearl': () => devOrder((o) => o.pearls),
       'dev-whip': () => devOrder((o) => o.whip),
       'dev-sealed': () => devOrder((o) => o.sealed),
+      'dev-espresso': () => devOrder((o) => o.base === 'espresso'),
       'dev-rush': () => {
         waiting.forEach((c) => c && (c.patience = Math.min(c.patience, 5)));
       },

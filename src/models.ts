@@ -797,3 +797,72 @@ export function makeQrStand(): T.Group {
   g.add(card, acrylic, foot, box, grille);
   return g;
 }
+
+/** Espresso machine with a group head, portafilter, drip tray and a shot glass under the spout. */
+export function makeEspressoMachine(): T.Group {
+  const g = new T.Group();
+  const steel = new T.MeshStandardMaterial({ color: 0xd4d6da, metalness: 0.9, roughness: 0.22 });
+  const red = new T.MeshStandardMaterial({ color: 0xb8231d, roughness: 0.35, metalness: 0.2 });
+  const dark = new T.MeshStandardMaterial({ color: 0x232323, roughness: 0.45 });
+  const body = new T.Mesh(new T.BoxGeometry(1.6, 1.5, 1.2), red);
+  body.position.set(0, 0.95, -0.1);
+  const top = new T.Mesh(new T.BoxGeometry(1.66, 0.12, 1.26), steel);
+  top.position.set(0, 1.76, -0.1);
+  const base = new T.Mesh(new T.BoxGeometry(1.7, 0.2, 1.4), steel);
+  base.position.y = 0.1;
+  // Drip tray grille under the spout.
+  const tray = new T.Mesh(new T.BoxGeometry(1.2, 0.06, 0.5), dark);
+  tray.position.set(0, 0.23, 0.55);
+  const head = new T.Mesh(new T.CylinderGeometry(0.2, 0.2, 0.22, 24), steel);
+  head.position.set(0, 1.08, 0.58);
+  const basket = new T.Mesh(new T.CylinderGeometry(0.21, 0.17, 0.14, 24), steel);
+  basket.position.set(0, 0.92, 0.58);
+  const handle = new T.Mesh(new T.CylinderGeometry(0.05, 0.06, 0.7, 12), dark);
+  handle.rotation.x = Math.PI / 2 - 0.25;
+  handle.position.set(0, 0.86, 1.0);
+  const shot = new T.Mesh(
+    new T.CylinderGeometry(0.13, 0.11, 0.3, 20, 1, true),
+    new T.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.05, transmission: 0.6, transparent: true, opacity: 0.45, side: T.DoubleSide }),
+  );
+  shot.position.set(0, 0.41, 0.58);
+  const coffee = new T.Mesh(new T.CylinderGeometry(0.115, 0.105, 0.14, 20), new T.MeshStandardMaterial({ color: 0x3a1c0c, roughness: 0.3 }));
+  coffee.position.set(0, 0.33, 0.58);
+  const crema = new T.Mesh(new T.CircleGeometry(0.115, 20), new T.MeshStandardMaterial({ color: 0xc58a4a, roughness: 0.6 }));
+  crema.rotation.x = -Math.PI / 2;
+  crema.position.set(0, 0.405, 0.58);
+  // Pressure gauge and buttons on the front panel.
+  const gauge = new T.Mesh(new T.CylinderGeometry(0.16, 0.16, 0.05, 24), steel);
+  gauge.rotation.x = Math.PI / 2;
+  gauge.position.set(-0.45, 1.42, 0.51);
+  const face = new T.Mesh(new T.CircleGeometry(0.13, 24), new T.MeshBasicMaterial({ color: 0xfaf6ea }));
+  face.position.set(-0.45, 1.42, 0.536);
+  const needle = new T.Mesh(new T.BoxGeometry(0.02, 0.11, 0.01), new T.MeshBasicMaterial({ color: 0xd8312a }));
+  needle.position.set(-0.43, 1.45, 0.54);
+  needle.rotation.z = -0.6;
+  g.add(body, top, base, tray, head, basket, handle, shot, coffee, crema, gauge, face, needle);
+  [0.32, 0.5].forEach((x, i) => {
+    const b = new T.Mesh(new T.CylinderGeometry(0.06, 0.06, 0.05, 16), i ? new T.MeshBasicMaterial({ color: 0x7fe08a }) : dark);
+    b.rotation.x = Math.PI / 2;
+    b.position.set(x, 1.42, 0.51);
+    g.add(b);
+  });
+  // Steam wand on the right side.
+  const wand = new T.Mesh(new T.CylinderGeometry(0.03, 0.03, 0.75, 10), steel);
+  wand.position.set(0.68, 0.95, 0.58);
+  wand.rotation.z = 0.15;
+  // Two small cups warming on top.
+  const cupMat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+  [-0.3, 0.15].forEach((x) => {
+    const cup = new T.Mesh(new T.CylinderGeometry(0.15, 0.11, 0.2, 20), cupMat);
+    cup.position.set(x, 1.92, -0.1);
+    g.add(cup);
+  });
+  g.add(wand);
+  // Turned a little toward the mat; the outer group's y rotation belongs to the table's hover sway.
+  const turned = new T.Group();
+  turned.rotation.y = 0.45;
+  turned.add(g);
+  const outer = new T.Group();
+  outer.add(turned);
+  return outer;
+}

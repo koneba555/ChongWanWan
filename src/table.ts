@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { ADD, ADD_IDS, BASE, GARNISH, VESSEL, type AddId, type BaseId, type VesselId } from './data';
-import { makeBottle, makeCan, makeCarryBag, makeCooler, makeFrother, makeGarnish, makeHookRail, makeHotPot, makeLimeBowl, makePearlBowl, makePlate, makeQrStand, makeSealer, makeWhipCan, makeSodaBottle, makeTableSpoon, makeThermoPot, makeTin, makeUtensilCup, makeVesselStack } from './models';
+import { makeBottle, makeCan, makeCarryBag, makeCooler, makeFrother, makeGarnish, makeHookRail, makeHotPot, makeLimeBowl, makeEspressoMachine, makePearlBowl, makePlate, makeQrStand, makeSealer, makeWhipCan, makeSodaBottle, makeTableSpoon, makeThermoPot, makeTin, makeUtensilCup, makeVesselStack } from './models';
 import type { UpgradeId } from './shop';
 import { buildShell, CUP_HOME, SERVE_HOME, type DrinkStage } from './stage';
 
@@ -69,7 +69,9 @@ const LID_OPEN = -1.95;
 
 const hitMaterial = new T.MeshBasicMaterial({ visible: false });
 
-const BASE_MODELS: Record<BaseId, () => T.Object3D> = {
+/** Every base but espresso stands on the shelf; espresso comes from its machine. */
+type ShelfBase = Exclude<BaseId, 'espresso'>;
+const BASE_MODELS: Record<ShelfBase, () => T.Object3D> = {
   tea: () => makeTin('ชาไทย', '#d9601a', '#fff3df'),
   black: () => makeTin('ชาดำ', '#5a2410', '#f6d9a8'),
   green: () => makeTin('ชาเขียว', '#5f9b2a', '#f4f7e0'),
@@ -171,7 +173,7 @@ export class Table {
 
   /** Sets every ingredient out on the shelf and table. */
   private setOut(): void {
-    (Object.keys(BASE) as BaseId[]).forEach((k, i) => this.add('base', k, BASE[k].n, BASE_MODELS[k](), EXTRA_SHELF_X[k] ?? -2.85 + i * 1.14, SHELF_Y, SHELF_Z, 0.8));
+    (Object.keys(BASE_MODELS) as ShelfBase[]).forEach((k, i) => this.add('base', k, BASE[k].n, BASE_MODELS[k](), EXTRA_SHELF_X[k] ?? -2.85 + i * 1.14, SHELF_Y, SHELF_Z, 0.8));
     // Everything stays off the mat, in a group on each side of the glasses.
     const addAt: Record<AddId, [number, number]> = { soda: [-2.75, -1.5], syrup: [-3.6, -1.5], lemon: [-4.45, -1.5], cond: [3.45, -1.5], evap: [4.25, -1.5], hot: [HOT_POT.x, HOT_POT.z] };
     ADD_IDS.forEach((k) => this.add('add', k, ADD[k], ADD_MODELS[k](), addAt[k][0], k === 'hot' ? HOT_POT.y : 0.02, addAt[k][1], k === 'hot' ? 0.8 : 0.72));
@@ -212,10 +214,10 @@ export class Table {
     kettle.press = true;
     const lime = this.add('add', 'lemon', 'มะนาวแป้นสด', makeLimeBowl(), -4.45, 0.02, -1.5, 0.75);
     const find = (kind: ItemKind, key: string, not: TableItem) => this.items.find((i) => i.kind === kind && i.key === key && i !== not) as TableItem;
-    const pearl = this.add('topping', 'pearl', 'ไข่มุกบุก (ตักใส่ภาชนะ)', makePearlBowl(), 3.95, 0.02, -0.3, 0.62);
+    const pearl = this.add('topping', 'pearl', 'ไข่มุกบุก (ตักใส่ภาชนะ)', makePearlBowl(), 2.9, 0.02, 3.2, 0.62);
     this.upgradeItems.frother = { on: [frother], off: [] };
     this.upgradeItems.pearl = { on: [pearl], off: [] };
-    const whip = this.add('topping', 'whip', 'วิปครีม (โปะหน้าแก้ว)', makeWhipCan(), 2.7, 0.02, 0.2, 0.55);
+    const whip = this.add('topping', 'whip', 'วิปครีม (โปะหน้าแก้ว)', makeWhipCan(), 2.05, 0.02, 3.35, 0.55);
     const sealer = this.add('sealer', 'sealer', 'เครื่องซีลฝา (กดเพื่อซีล)', makeSealer(), 3.05, 0.02, 1.85, 0.7);
     sealer.press = true;
     this.upgradeItems.whip = { on: [whip], off: [] };
@@ -226,6 +228,9 @@ export class Table {
     qr.scale.setScalar(0.75);
     this.stage.tableG.add(qr);
     this.upgradeProps.qr = { on: [qr], off: [] };
+    const espresso = this.add('base', 'espresso', 'เครื่องเอสเพรสโซ่ (กดชงช็อต)', makeEspressoMachine(), -3.65, 0.02, 2.95, 0.72);
+    espresso.press = true;
+    this.upgradeItems.espresso = { on: [espresso], off: [] };
     (['cocoa', 'matcha'] as const).forEach((k) => (this.upgradeItems[k] = { on: [this.find('base', k) as TableItem], off: [] }));
     this.upgradeItems.kettle = { on: [kettle], off: [find('add', 'hot', kettle)] };
     this.upgradeItems.lime = { on: [lime], off: [find('add', 'lemon', lime)] };

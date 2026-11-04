@@ -1,4 +1,4 @@
-export type UpgradeId = 'frother' | 'kettle' | 'lime' | 'cocoa' | 'matcha' | 'pearl' | 'hook' | 'whip' | 'sealer' | 'qr';
+export type UpgradeId = 'frother' | 'kettle' | 'lime' | 'cocoa' | 'matcha' | 'pearl' | 'hook' | 'whip' | 'sealer' | 'qr' | 'espresso';
 
 export type Category = 'machine' | 'fresh' | 'topping' | 'tools' | 'pack';
 
@@ -32,7 +32,7 @@ export interface ComingSoon {
 }
 
 export const COMING_SOON: ComingSoon[] = [
-  { key: 'espresso', name: 'เครื่องชงเอสเพรสโซ', category: 'machine', price: 1500 },
+  { key: 'blender', name: 'เครื่องปั่นน้ำผลไม้', category: 'machine', price: 1200 },
 ];
 
 export const UPGRADES: Upgrade[] = [
@@ -46,6 +46,7 @@ export const UPGRADES: Upgrade[] = [
   { id: 'whip', name: 'วิปครีมกระป๋อง', price: 300, effect: 'กดวิปครีมโปะหน้าแก้วหลังเทน้ำ ปลดล็อกเมนูวิปครีม ได้เพิ่มแก้วละ 10 บาท', category: 'topping', was: 390, sold: 15300, stars: 4.8, seller: 'ท็อปปิ้งแมวอ้วน' },
   { id: 'sealer', name: 'เครื่องซีลฝาแก้ว', price: 650, effect: 'กดที่เครื่องเพื่อซีลฝาแก้วที่เทแล้ว ไรเดอร์จะเริ่มมารับออเดอร์ที่ต้องซีลฝา ได้เพิ่มแก้วละ 5 บาท', category: 'pack', was: 1290, sold: 3700, stars: 4.7, seller: 'แพ็กเกจจิ้งเหมียวโปร' },
   { id: 'qr', name: 'ป้าย QR กับกล่องเสียงรับเงิน', price: 400, effect: 'ลูกค้าสแกนจ่ายได้ ไม่ต้องรอทอน ลูกค้ายอมรอนานขึ้น 20% และกล่องเสียงบอกยอดเงินทุกครั้งที่ได้เงิน', category: 'tools', was: 590, sold: 41000, stars: 4.9, seller: 'เหมียวเพย์ ช็อป' },
+  { id: 'espresso', name: 'เครื่องชงเอสเพรสโซ่', price: 1500, effect: 'กดที่เครื่องเพื่อชงช็อตเอสเพรสโซ่ลงแก้วตวง ปลดล็อกเมนูกาแฟสด ลาเต้ อเมริกาโน่ ขายแพงขึ้นแก้วละ 20 บาท', category: 'machine', was: 3290, sold: 2100, stars: 4.9, seller: 'บ้านกาแฟแมวส้ม' },
 ];
 
 export interface Save {

@@ -23,7 +23,8 @@ const PICS: Record<string, string> = {
   whip: '<rect x="38" y="30" width="24" height="60" rx="6" fill="#e9e7f2"/><rect x="38" y="48" width="24" height="18" fill="#6a8fd8"/><path d="M44 30 L50 10 L56 30 Z" fill="#c9c7d2"/>',
   pearl: '<path d="M20 50 Q50 92 80 50 Z" fill="#f4e6cf"/><g fill="#3a2414"><circle cx="35" cy="54" r="6"/><circle cx="48" cy="58" r="6"/><circle cx="61" cy="54" r="6"/><circle cx="42" cy="66" r="6"/><circle cx="56" cy="66" r="6"/><circle cx="50" cy="48" r="6"/></g>',
   sealer: '<rect x="18" y="40" width="64" height="44" rx="6" fill="#e6e1d6"/><rect x="30" y="14" width="40" height="30" rx="5" fill="#d8312a"/><rect x="40" y="58" width="20" height="24" fill="#bfe6f0" stroke="#9cc"/>',
-  espresso: '<rect x="18" y="16" width="64" height="70" rx="6" fill="#bfc2c6"/><rect x="18" y="16" width="64" height="16" rx="6" fill="#5b5f66"/><rect x="40" y="38" width="20" height="8" rx="3" fill="#2b2b2b"/><rect x="40" y="62" width="20" height="16" rx="3" fill="#fff"/><path d="M60 66 h6 v6 h-6" fill="none" stroke="#fff" stroke-width="2"/>',
+  blender: '<rect x="30" y="70" width="40" height="20" rx="5" fill="#5b5f66"/><circle cx="50" cy="80" r="4" fill="#7fe08a"/><path d="M32 22 h36 l-5 48 h-26 z" fill="#dff3f7" stroke="#8fb8c2" stroke-width="2"/><path d="M35 45 h30 l-3 25 h-24 z" fill="#ff9f43"/><rect x="30" y="14" width="40" height="9" rx="3" fill="#5b5f66"/>',
+  espresso: '<rect x="18" y="16" width="64" height="70" rx="6" fill="#b8231d"/><rect x="18" y="16" width="64" height="16" rx="6" fill="#5b5f66"/><rect x="40" y="38" width="20" height="8" rx="3" fill="#2b2b2b"/><rect x="40" y="62" width="20" height="16" rx="3" fill="#fff"/><path d="M60 66 h6 v6 h-6" fill="none" stroke="#fff" stroke-width="2"/>',
 };
 
 const pic = (key: string) => `<svg viewBox="0 0 100 100" aria-hidden="true">${PICS[key] ?? ''}</svg>`;
