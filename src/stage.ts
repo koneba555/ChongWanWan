@@ -59,6 +59,18 @@ function addGlassSkin(g: T.Group, geo: T.BufferGeometry): void {
   g.add(body, rim);
 }
 
+/** Clear plastic takeaway bag a sealed cup goes into, knotted at the top. */
+function buildTakeoutBag(): T.Group {
+  const g = new T.Group();
+  const pts = spline([[0.001, 0.02], [1.1, 0.04], [1.22, 0.4], [1.24, 2.4], [1.18, 3.5], [0.8, 4.1], [0.22, 4.45], [0.14, 4.75]], 80);
+  addGlassSkin(g, crinkle(new T.LatheGeometry(pts, 64)));
+  const band = new T.Mesh(new T.TorusGeometry(0.17, 0.045, 8, 24), new T.MeshStandardMaterial({ color: 0xd94b6a, roughness: 0.5 }));
+  band.rotation.x = Math.PI / 2;
+  band.position.y = 4.45;
+  g.add(band);
+  return g;
+}
+
 /** Serving vessels: a plastic cup that gets a dome lid, or a bag tied with a rubber band, both once served. */
 export function buildShell(k: VesselId, finished: boolean): T.Group {
   const g = new T.Group();
@@ -134,6 +146,9 @@ export class DrinkStage {
   private readonly whip = makeWhip();
   /** Sealing film on the cup rim, at the height of the rim ring. */
   private readonly film = makeSealFilm(0.885);
+  /** A sealed cup goes out in a plastic bag with the straw beside it. */
+  private readonly bag = buildTakeoutBag();
+  private readonly bagStraw = makeGarnish('straw', 'carrier');
   private readonly shells: Record<string, T.Group> = {};
   private shellNow: T.Group | null = null;
   private vessel: VesselId = 'cup';
@@ -262,7 +277,12 @@ export class DrinkStage {
     this.whip.visible = false;
     this.film.visible = false;
     this.film.position.y = 3.075;
-    this.servingG.add(this.pearls, this.whip, this.film);
+    this.bag.visible = false;
+    this.bagStraw.rotation.z = -0.36;
+    this.bagStraw.scale.setScalar(0.78);
+    this.bagStraw.position.set(-0.4, 0.3, 1.02);
+    this.bag.add(this.bagStraw);
+    this.servingG.add(this.pearls, this.whip, this.film, this.bag);
 
     const rb = rng(9);
     for (let i = 0; i < BUBBLES; i++) this.bubbleState.push({ a: rb() * 6.28, rf: Math.sqrt(rb()) * 0.82, y: rb(), v: 0.05 + rb() * 0.14 });
@@ -545,6 +565,12 @@ export class DrinkStage {
     if (this.level > 0.01) this.buildLiquid(this.level);
   }
 
+  /** Finishing touch when the drink is closed up: a straw through the lid or knot, or into a bag for a sealed cup. */
+  packUp(sealed: boolean): void {
+    this.setGarnish(sealed ? 'none' : 'straw', true);
+    this.bag.visible = sealed;
+  }
+
   setGarnish(k: GarnishId, instant: boolean): void {
     if (k === this.garnishKey && this.garnishObj) return;
     if (this.garnishObj) this.servingG.remove(this.garnishObj);
@@ -590,6 +616,7 @@ export class DrinkStage {
     this.pearls.visible = s.pearls;
     this.whip.visible = s.whip;
     this.film.visible = s.sealed;
+    this.bag.visible = false;
     this.setGarnish(s.garnish, instant);
     if (instant) {
       this.level = this.levelTarget;
@@ -828,7 +855,8 @@ export class DrinkStage {
     this.serveScale = 1;
     this.setGarnish('none', true);
     this.setVessel(o.vessel, !o.sealed);
-    this.applyDrink({ base: o.base, milk: o.milk, ice: o.ice, garnish: o.garnish, mix: 1, vessel: o.vessel, poured: true, pearls: o.pearls, whip: o.whip, sealed: o.sealed, topped: false }, true);
+    this.applyDrink({ base: o.base, milk: o.milk, ice: o.ice, garnish: 'none', mix: 1, vessel: o.vessel, poured: true, pearls: o.pearls, whip: o.whip, sealed: o.sealed, topped: false }, true);
+    this.packUp(o.sealed ?? false);
 
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(420, 330, false);

@@ -51,7 +51,13 @@ const $ = <E extends Element = HTMLElement>(sel: string) => document.querySelect
 const RING_LENGTH = 138.2;
 const KEY_STIR_SPEED = 9.4; // radians per second, about 1.5 turns
 const WAITING = 3;
-const RESULT_SECONDS = 4.5;
+/** Customers walk up one at a time: seconds between arrivals, sooner when the cart stands empty. */
+const ARRIVE_GAP: [number, number] = [9, 15];
+const EMPTY_GAP: [number, number] = [2, 4];
+/** Chance the next arrival brings a friend along. */
+const PAIR_SHARE = 0.2;
+/** Most customers at the cart at once; the rush days fill every hook. */
+const crowdFor = (day: number) => (day >= 6 ? 3 : 2);
 /** Customers who come to the cart in one day. */
 const DAY_CUSTOMERS = 8;
 /** Seconds a customer waits on day 1; each later day they are a little less patient. */
@@ -134,7 +140,7 @@ function avatarSvg(o: Order): string {
 /** Short description of a finished drink, for its name tag on the hook. */
 function describe(d: Drink): string {
   const parts = [d.base ? BASE[d.base].n : 'ไม่มีน้ำฐาน', ...ADD_IDS.filter((k) => d.milk[k]).map((k) => ADD[k] + (d.milk[k] > 1 ? ` ×${d.milk[k]}` : ''))];
-  return `${parts.join(' + ')}${d.pearls ? ' + ไข่มุก' : ''}${d.whip ? ' + วิปครีม' : ''}${d.sealed ? ' · ซีลฝา' : ''}${d.garnish === 'straw' ? ' · มีหลอด' : ''}`;
+  return `${parts.join(' + ')}${d.pearls ? ' + ไข่มุก' : ''}${d.whip ? ' + วิปครีม' : ''}${d.sealed ? ' · ซีลฝา' : ''}`;
 }
 
 export function startGame(stage: DrinkStage): void {
@@ -168,7 +174,7 @@ export function startGame(stage: DrinkStage): void {
   const waiting: (Customer | null)[] = [];
   /** Finished drinks hanging on the hooks, by slot. */
   const tray: ({ drink: Drink; item: TableItem } | null)[] = HANG_SLOTS.map(() => null);
-  let resultTimer = 0;
+  let nextArrival = 0;
   let dayOpen = false;
   let arrived = 0;
   /** Which arrivals of the day bring a contradictory order, and which have come already. */
@@ -280,10 +286,10 @@ export function startGame(stage: DrinkStage): void {
     }
     if (drink.ice === 'none' && !drink.topped && !stage.pouring) return `ไม่ใส่น้ำแข็ง น้ำเลยได้ครึ่งแก้ว จะกดเติมให้เต็ม (ค่าวัตถุดิบ ${TOP_UP_COST} บาท) หรือแขวนส่งครึ่งแก้วก็ได้`;
     if (drink.vessel === 'cup' && !drink.whip && !drink.sealed) {
-      if (owned.has('whip') && waiting.some((c) => c?.order.whip)) return 'ถ้าสั่งวิปครีม ลากกระป๋องวิปครีมมาโปะหน้าแก้ว แล้วค่อยใส่หลอดและแขวนรอส่ง';
-      if (owned.has('sealer') && waiting.some((c) => c?.order.sealed)) return 'ไรเดอร์ขอซีลฝา กดที่เครื่องซีลข้างภาชนะ แล้วค่อยใส่หลอดและแขวนรอส่ง';
+      if (owned.has('whip') && waiting.some((c) => c?.order.whip)) return 'ถ้าสั่งวิปครีม ลากกระป๋องวิปครีมมาโปะหน้าแก้ว แล้วกดแขวนรอส่ง';
+      if (owned.has('sealer') && waiting.some((c) => c?.order.sealed)) return 'ไรเดอร์ขอซีลฝา กดที่เครื่องซีลข้างภาชนะ แล้วกดแขวนรอส่ง (ใส่ถุงพร้อมหลอดให้เอง)';
     }
-    return 'ถ้าลูกค้าขอหลอด ลากหลอดข้างนมข้นมาใส่ แล้วกดปุ่มใต้ภาชนะเพื่อแขวนรอส่ง';
+    return 'กดปุ่มใต้ภาชนะเพื่อปิดฝา ใส่หลอด แล้วแขวนรอส่ง';
   }
 
   function updateHud(): void {
@@ -625,11 +631,9 @@ export function startGame(stage: DrinkStage): void {
 
   function renderOrders(fresh = -1): void {
     ordersEl.textContent = '';
+    if (!waiting.some(Boolean)) ordersEl.append(el('article', { className: 'order empty', text: dayOpen ? 'ยังไม่มีลูกค้า รอสักครู่...' : 'ไม่มีลูกค้ารอ' }));
     waiting.forEach((c, i) => {
-      if (!c) {
-        ordersEl.append(el('article', { className: 'order empty', text: 'ไม่มีลูกค้ารอ' }));
-        return;
-      }
+      if (!c) return;
       const o = c.shown;
       const blind = !kidHere() && !c.browse;
       const card = el('article', { className: `order${i === fresh ? ' new' : ''}${c.paradox && !c.answer ? ' ask' : ''}${blind ? ' blind' : ''}` });
@@ -705,17 +709,19 @@ export function startGame(stage: DrinkStage): void {
       list.append(li);
     });
     resultCard.append(el('div', { id: 'verdict', text: title }), el('div', { id: 'earn', text: line }), list);
+    const close = el('button', { className: 'close', text: '×' });
+    close.type = 'button';
+    close.setAttribute('aria-label', 'ปิดรีวิว');
+    resultCard.append(close);
     resultCard.hidden = false;
-    clearTimeout(resultTimer);
-    resultTimer = window.setTimeout(() => (resultCard.hidden = true), RESULT_SECONDS * 1000);
   }
 
   /** A customer is finished with, served or not; their slot goes to the next arrival. */
   function customerDone(slot: number): void {
     today.done++;
-    waiting[slot] = arrive();
-    announce(waiting[slot]);
-    renderOrders(slot);
+    waiting[slot] = null;
+    if (!waiting.some(Boolean)) nextArrival = Math.min(nextArrival, dayClock + between(EMPTY_GAP));
+    renderOrders();
     updateHud();
     if (today.done >= DAY_CUSTOMERS) endDay();
   }
@@ -917,6 +923,7 @@ export function startGame(stage: DrinkStage): void {
     }
     stopStirring();
     stage.setVessel(drink.vessel, !drink.sealed);
+    stage.packUp(drink.sealed);
     const item = table.addReady(stage.bakeServing(), slot, VESSEL[drink.vessel]);
     tray[slot] = { drink: { ...drink, milk: { ...drink.milk } }, item };
     clearDrink();
@@ -938,7 +945,8 @@ export function startGame(stage: DrinkStage): void {
     if (day >= 2) while (paradoxAt.size < PARADOXES_PER_DAY) paradoxAt.add(2 + Math.floor(Math.random() * (DAY_CUSTOMERS - 1)));
     // Day one always opens with the Thai iced tea, which the hints walk through.
     waiting.push(arrive(day === 1 ? ORDERS[0] : undefined));
-    while (waiting.length < WAITING) waiting.push(arrive());
+    while (waiting.length < WAITING) waiting.push(null);
+    nextArrival = between(ARRIVE_GAP);
     waiting.forEach(announce);
     tray.forEach((entry, i) => {
       if (entry) table.removeItem(entry.item);
@@ -1143,6 +1151,25 @@ export function startGame(stage: DrinkStage): void {
     updateStirUI();
   }
 
+  const between = ([lo, hi]: [number, number]) => lo + Math.random() * (hi - lo);
+
+  /** The next one or two customers walk up, if there is room at the cart. */
+  function walkUp(): void {
+    nextArrival = dayClock + between(ARRIVE_GAP);
+    const room = crowdFor(day) - waiting.filter(Boolean).length;
+    if (room <= 0 || arrived >= DAY_CUSTOMERS) return;
+    const count = room > 1 && Math.random() < PAIR_SHARE ? 2 : 1;
+    for (let n = 0; n < count; n++) {
+      const slot = waiting.indexOf(null);
+      const c = slot < 0 ? null : arrive();
+      if (!c) break;
+      waiting[slot] = c;
+      announce(c);
+      renderOrders(slot);
+    }
+    updateHud();
+  }
+
   function patienceFrame(dt: number): void {
     if (!dayOpen) return;
     dayClock += dt;
@@ -1150,6 +1177,7 @@ export function startGame(stage: DrinkStage): void {
       raidAt = -1;
       raid();
     }
+    if (dayClock >= nextArrival) walkUp();
     waiting.forEach((c, i) => {
       if (!c) return;
       c.patience -= dt;

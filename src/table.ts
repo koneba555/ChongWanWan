@@ -1,6 +1,6 @@
 import * as T from 'three';
-import { ADD, ADD_IDS, BASE, GARNISH, VESSEL, type AddId, type BaseId, type VesselId } from './data';
-import { makeBottle, makeCan, makeCarryBag, makeCooler, makeFrother, makeGarnish, makeHookRail, makeHotPot, makeLimeBowl, makeEspressoMachine, makePearlBowl, makePlate, makeQrStand, makeSealer, makeWhipCan, makeSodaBottle, makeTableSpoon, makeThermoPot, makeTin, makeUtensilCup, makeVesselStack } from './models';
+import { ADD, ADD_IDS, BASE, VESSEL, type AddId, type BaseId, type VesselId } from './data';
+import { makeBottle, makeCan, makeCarryBag, makeCooler, makeFrother, makeHookRail, makeHotPot, makeLimeBowl, makeEspressoMachine, makePearlBowl, makePlate, makeQrStand, makeSealer, makeWhipCan, makeSodaBottle, makeTableSpoon, makeThermoPot, makeTin, makeUtensilCup, makeVesselStack } from './models';
 import type { UpgradeId } from './shop';
 import { buildShell, CUP_HOME, SERVE_HOME, type DrinkStage } from './stage';
 
@@ -195,7 +195,6 @@ export class Table {
     const spoon = makeTableSpoon();
     spoon.rotation.z = -Math.PI / 2;
     this.add('spoon', 'spoon', 'ช้อนคน', spoon, UTENSIL_CUP.x - 0.1, UTENSIL_CUP.y + 0.08, UTENSIL_CUP.z, 0.68);
-    this.add('garnish', 'straw', GARNISH.straw, makeGarnish('straw', 'cup'), UTENSIL_CUP.x + 0.12, UTENSIL_CUP.y + 0.08, UTENSIL_CUP.z + 0.05, 0.32);
 
     const cooler = makeCooler();
     this.coolerLid = cooler.lid;

@@ -284,3 +284,5 @@ img { max-width: 100%; }
 #ding { position: absolute; z-index: 5; right: max(24px, env(safe-area-inset-right, 0px)); top: 62px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; color: #fff; background: #18227a; border: 1px solid #8fa0ff88; border-radius: 99px; padding: 6px 14px 6px 10px; box-shadow: 0 6px 16px #0007; animation: ding-in .25s ease-out; }
 #ding::before { content: ""; width: 18px; height: 18px; background: #fff; clip-path: polygon(0 35%, 30% 35%, 65% 5%, 65% 95%, 30% 65%, 0 65%); }
 @keyframes ding-in { from { transform: translateY(-8px) scale(.9); opacity: 0; } }
+#result-card .close { position: absolute; top: 4px; right: 6px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer; }
+#result-card .close:hover { background: #0001; }

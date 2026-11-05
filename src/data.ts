@@ -130,39 +130,49 @@ export const blankDrink = (): Drink => ({
 type OrderSpec = Omit<Order, 'milk' | 'ice' | 'pearls' | 'whip' | 'sealed'> & { milk: Partial<Additions>; pearls?: boolean; whip?: boolean; sealed?: boolean };
 
 const ORDER_SPECS: OrderSpec[] = [
-  { name: 'ชาเย็น หวานน้อย', who: 'ป้าแจ่ม', skin: '#e7b58e', hair: '#6b6b6b', top: '#c0392b', quote: 'ชาเย็นใส่ถุงหิ้วนะลูก หวานน้อย ขอหลอดด้วย', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'carrier' },
-  { name: 'โอเลี้ยง หวานปกติ', who: 'ลุงวิน', skin: '#b98258', hair: '#231c17', top: '#d97a1c', quote: 'โอเลี้ยงเข้มๆ ใส่ถุงหิ้ว ไม่เอาหลอด รีบครับ', base: 'coffee', milk: { hot: 1, syrup: 2 }, garnish: 'none', vessel: 'carrier' },
-  { name: 'นมชมพู หวานมาก', who: 'น้องมิ้น', skin: '#f3cba8', hair: '#2a1b12', top: '#f6f6f6', quote: 'นมชมพูใส่แก้วค่ะ หวานๆ ขอหลอดด้วย', base: 'red', milk: { cond: 3, evap: 1 }, garnish: 'straw', vessel: 'cup' },
-  { name: 'อัญชันมะนาว', who: 'พี่ออฟฟิศ', skin: '#eabf98', hair: '#17110d', top: '#35577f', quote: 'อัญชันมะนาวใส่แก้ว หวานน้อย ขอหลอดครับ', base: 'pea', milk: { syrup: 1, lemon: 1 }, garnish: 'straw', vessel: 'cup' },
-  { name: 'ชาเขียวนม', who: 'น้องแพร', skin: '#f0c8a4', hair: '#3a2415', top: '#ffffff', quote: 'ชาเขียวนมใส่ถุงหิ้วค่ะ หวานปกติ ขอหลอดด้วย', base: 'green', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'carrier' },
-  { name: 'น้ำแดงโซดา', who: 'เฮียเล็ก', skin: '#ecc6a2', hair: '#1b1512', top: '#2f8f6b', quote: 'น้ำแดงโซดาใส่แก้ว ซ่าๆ หวานน้อย ขอหลอดด้วย', base: 'red', milk: { syrup: 1, soda: 2 }, garnish: 'straw', vessel: 'cup' },
-  { name: 'ชามะนาว', who: 'พี่ส้ม', skin: '#d9a67c', hair: '#2a1a10', top: '#e0a12b', quote: 'ชามะนาวใส่แก้วจ้ะ เปรี้ยวๆ หวานปกติ ไม่เอาหลอด', base: 'black', milk: { hot: 1, syrup: 2, lemon: 2 }, garnish: 'none', vessel: 'cup' },
-  { name: 'ชาดำเย็น', who: 'ลุงชัย', skin: '#b5825a', hair: '#8a8a8a', top: '#3f5e8c', quote: 'ชาดำเย็นใส่ถุงหิ้ว หวานปกติ ไม่ใส่นม ไม่เอาหลอด', base: 'black', milk: { hot: 1, syrup: 2 }, garnish: 'none', vessel: 'carrier' },
-  { name: 'กาแฟเย็น', who: 'พี่ฟ้า', skin: '#f0c8a4', hair: '#20140e', top: '#7c4dab', quote: 'กาแฟเย็นใส่แก้วค่ะ นมเยอะหน่อย หวานปกติ ขอหลอด', base: 'coffee', milk: { hot: 1, cond: 2, evap: 2 }, garnish: 'straw', vessel: 'cup' },
-  { name: 'กาแฟโบราณ', who: 'ตาบุญ', skin: '#b98a60', hair: '#d8d8d8', top: '#6b8e4e', quote: 'กาแฟโบราณใส่ถุงหิ้ว ใส่นมข้นอย่างเดียว ขอหลอดด้วย', base: 'coffee', milk: { hot: 1, cond: 2 }, garnish: 'straw', vessel: 'carrier' },
+  { name: 'ชาเย็น หวานน้อย', who: 'ป้าแจ่ม', skin: '#e7b58e', hair: '#6b6b6b', top: '#c0392b', quote: 'ชาเย็นใส่ถุงหิ้วนะลูก หวานน้อย', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'carrier' },
+  { name: 'โอเลี้ยง หวานปกติ', who: 'ลุงวิน', skin: '#b98258', hair: '#231c17', top: '#d97a1c', quote: 'โอเลี้ยงเข้มๆ ใส่ถุงหิ้ว รีบครับ', base: 'coffee', milk: { hot: 1, syrup: 2 }, garnish: 'none', vessel: 'carrier' },
+  { name: 'นมชมพู หวานมาก', who: 'น้องมิ้น', skin: '#f3cba8', hair: '#2a1b12', top: '#f6f6f6', quote: 'นมชมพูใส่แก้วค่ะ หวานๆ', base: 'red', milk: { cond: 3, evap: 1 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'อัญชันมะนาว', who: 'พี่ออฟฟิศ', skin: '#eabf98', hair: '#17110d', top: '#35577f', quote: 'อัญชันมะนาวใส่แก้ว หวานน้อย', base: 'pea', milk: { hot: 1, syrup: 1, lemon: 1 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'ชาเขียวนม', who: 'น้องแพร', skin: '#f0c8a4', hair: '#3a2415', top: '#ffffff', quote: 'ชาเขียวนมใส่ถุงหิ้วค่ะ หวานปกติ', base: 'green', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'carrier' },
+  { name: 'น้ำแดงโซดา', who: 'เฮียเล็ก', skin: '#ecc6a2', hair: '#1b1512', top: '#2f8f6b', quote: 'น้ำแดงโซดาใส่แก้ว ซ่าๆ หวานน้อย', base: 'red', milk: { syrup: 1, soda: 2 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'ชามะนาว', who: 'พี่ส้ม', skin: '#d9a67c', hair: '#2a1a10', top: '#e0a12b', quote: 'ชามะนาวใส่แก้วจ้ะ เปรี้ยวๆ หวานปกติ', base: 'black', milk: { hot: 1, syrup: 2, lemon: 2 }, garnish: 'none', vessel: 'cup' },
+  { name: 'ชาดำเย็น', who: 'ลุงชัย', skin: '#b5825a', hair: '#8a8a8a', top: '#3f5e8c', quote: 'ชาดำเย็นใส่ถุงหิ้ว หวานปกติ ไม่ใส่นม', base: 'black', milk: { hot: 1, syrup: 2 }, garnish: 'none', vessel: 'carrier' },
+  { name: 'กาแฟเย็น', who: 'พี่ฟ้า', skin: '#f0c8a4', hair: '#20140e', top: '#7c4dab', quote: 'กาแฟเย็นใส่แก้วค่ะ นมเยอะหน่อย หวานปกติ', base: 'coffee', milk: { hot: 1, cond: 2, evap: 2 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'กาแฟโบราณ', who: 'ตาบุญ', skin: '#b98a60', hair: '#d8d8d8', top: '#6b8e4e', quote: 'กาแฟโบราณใส่ถุงหิ้ว ใส่นมข้นอย่างเดียว', base: 'coffee', milk: { hot: 1, cond: 2 }, garnish: 'straw', vessel: 'carrier' },
   // Unlocked by Phase 2 shop upgrades: cocoa, matcha and tapioca pearls.
-  { name: 'โกโก้เย็น', who: 'น้องต้นกล้า', skin: '#f2c9a5', hair: '#2b1a10', top: '#3d8bd1', quote: 'โกโก้เย็นใส่แก้วครับ หวานปกติ ขอหลอดด้วย', base: 'cocoa', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup' },
-  { name: 'มัทฉะลาเต้', who: 'พี่เมย์', skin: '#f3d0ae', hair: '#5a3a22', top: '#e8b4c8', quote: 'มัทฉะลาเต้ใส่แก้วค่ะ หวานน้อย นมเยอะ ขอหลอด', base: 'matcha', milk: { hot: 1, syrup: 1, evap: 2 }, garnish: 'straw', vessel: 'cup' },
-  { name: 'ชาไทยไข่มุก', who: 'น้องเบล', skin: '#f0c8a4', hair: '#1f140d', top: '#f4a261', quote: 'ชาไทยไข่มุกใส่แก้วค่ะ หวานน้อย ขอหลอดใหญ่ๆ', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'cup', pearls: true },
-  { name: 'ชานมไข่มุก', who: 'พี่บอส', skin: '#d9a67c', hair: '#120c08', top: '#2d2d2d', quote: 'ชานมไข่มุกใส่ถุงหิ้ว หวานปกติ ขอหลอดครับ', base: 'black', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'carrier', pearls: true },
-  { name: 'โกโก้ไข่มุก', who: 'น้องข้าวปั้น', skin: '#f6d3b3', hair: '#3a2415', top: '#ffd166', quote: 'โกโก้ไข่มุกใส่แก้ว หวานมาก ขอหลอดด้วย', base: 'cocoa', milk: { hot: 1, cond: 3 }, garnish: 'straw', vessel: 'cup', pearls: true },
-  { name: 'มัทฉะไข่มุก', who: 'คุณนิด', skin: '#e9bf98', hair: '#6b6b6b', top: '#5b8c5a', quote: 'มัทฉะไข่มุกใส่ถุงหิ้วจ้ะ หวานน้อย ใส่นมนิดนึง ขอหลอด', base: 'matcha', milk: { hot: 1, syrup: 1, evap: 1 }, garnish: 'straw', vessel: 'carrier', pearls: true },
+  { name: 'โกโก้เย็น', who: 'น้องต้นกล้า', skin: '#f2c9a5', hair: '#2b1a10', top: '#3d8bd1', quote: 'โกโก้เย็นใส่แก้วครับ หวานปกติ', base: 'cocoa', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'มัทฉะลาเต้', who: 'พี่เมย์', skin: '#f3d0ae', hair: '#5a3a22', top: '#e8b4c8', quote: 'มัทฉะลาเต้ใส่แก้วค่ะ หวานน้อย นมเยอะ', base: 'matcha', milk: { hot: 1, syrup: 1, evap: 2 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'ชาไทยไข่มุก', who: 'น้องเบล', skin: '#f0c8a4', hair: '#1f140d', top: '#f4a261', quote: 'ชาไทยไข่มุกใส่แก้วค่ะ หวานน้อย', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'cup', pearls: true },
+  { name: 'ชานมไข่มุก', who: 'พี่บอส', skin: '#d9a67c', hair: '#120c08', top: '#2d2d2d', quote: 'ชานมไข่มุกใส่ถุงหิ้ว หวานปกติ', base: 'black', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'carrier', pearls: true },
+  { name: 'โกโก้ไข่มุก', who: 'น้องข้าวปั้น', skin: '#f6d3b3', hair: '#3a2415', top: '#ffd166', quote: 'โกโก้ไข่มุกใส่แก้ว หวานมาก', base: 'cocoa', milk: { hot: 1, cond: 3 }, garnish: 'straw', vessel: 'cup', pearls: true },
+  { name: 'มัทฉะไข่มุก', who: 'คุณนิด', skin: '#e9bf98', hair: '#6b6b6b', top: '#5b8c5a', quote: 'มัทฉะไข่มุกใส่ถุงหิ้วจ้ะ หวานน้อย ใส่นมนิดนึง', base: 'matcha', milk: { hot: 1, syrup: 1, evap: 1 }, garnish: 'straw', vessel: 'carrier', pearls: true },
   // Phase 3: whipped cream on top, and delivery riders who need a sealed cup.
-  { name: 'ชาเย็นวิปครีม', who: 'น้องปอนด์', skin: '#f2c9a5', hair: '#24170e', top: '#ef476f', quote: 'ชาเย็นใส่แก้ว หวานน้อย โปะวิปครีมเยอะๆ ขอหลอดค่ะ', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'cup', whip: true },
-  { name: 'นมชมพูวิปครีม', who: 'น้องใบเตย', skin: '#f6d3b3', hair: '#3a2415', top: '#ffafcc', quote: 'นมชมพูใส่แก้ว หวานปกติ ใส่วิปครีมด้วย ขอหลอดค่ะ', base: 'red', milk: { cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup', whip: true },
-  { name: 'โกโก้วิปครีม', who: 'พี่แบงก์', skin: '#d9a67c', hair: '#120c08', top: '#264653', quote: 'โกโก้เย็นใส่แก้ว หวานปกติ โปะวิปครีม ขอหลอดครับ', base: 'cocoa', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup', whip: true },
-  { name: 'ชาเย็น ซีลฝา', who: 'ไรเดอร์ต้น', skin: '#c99068', hair: '#17110d', top: '#2a9d8f', quote: 'ไรเดอร์รับออเดอร์ครับ ชาเย็นใส่แก้ว ซีลฝาให้ด้วย หวานน้อย ขอหลอด', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'cup', sealed: true },
-  { name: 'กาแฟเย็น ซีลฝา', who: 'ไรเดอร์ฝน', skin: '#e9bf98', hair: '#2a1a10', top: '#e76f51', quote: 'ไรเดอร์ค่ะ กาแฟเย็นใส่แก้วซีลฝา นมเยอะ หวานปกติ ขอหลอด', base: 'coffee', milk: { hot: 1, cond: 2, evap: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
-  { name: 'น้ำแดงโซดา ซีลฝา', who: 'ไรเดอร์โจ้', skin: '#b98258', hair: '#231c17', top: '#2a9d8f', quote: 'ไรเดอร์ครับ น้ำแดงโซดาใส่แก้วซีลฝา หวานน้อย ขอหลอด', base: 'red', milk: { syrup: 1, soda: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
+  { name: 'ชาเย็นวิปครีม', who: 'น้องปอนด์', skin: '#f2c9a5', hair: '#24170e', top: '#ef476f', quote: 'ชาเย็นใส่แก้ว หวานน้อย โปะวิปครีมเยอะๆ', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'cup', whip: true },
+  { name: 'นมชมพูวิปครีม', who: 'น้องใบเตย', skin: '#f6d3b3', hair: '#3a2415', top: '#ffafcc', quote: 'นมชมพูใส่แก้ว หวานปกติ ใส่วิปครีมด้วย', base: 'red', milk: { cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup', whip: true },
+  { name: 'โกโก้วิปครีม', who: 'พี่แบงก์', skin: '#d9a67c', hair: '#120c08', top: '#264653', quote: 'โกโก้เย็นใส่แก้ว หวานปกติ โปะวิปครีม', base: 'cocoa', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup', whip: true },
+  { name: 'ชาเย็น ซีลฝา', who: 'ไรเดอร์ต้น', skin: '#c99068', hair: '#17110d', top: '#2a9d8f', quote: 'ไรเดอร์รับออเดอร์ครับ ชาเย็นใส่แก้ว ซีลฝาให้ด้วย หวานน้อย', base: 'tea', milk: { hot: 1, cond: 1, evap: 1 }, garnish: 'straw', vessel: 'cup', sealed: true },
+  { name: 'กาแฟเย็น ซีลฝา', who: 'ไรเดอร์ฝน', skin: '#e9bf98', hair: '#2a1a10', top: '#e76f51', quote: 'ไรเดอร์ค่ะ กาแฟเย็นใส่แก้วซีลฝา นมเยอะ หวานปกติ', base: 'coffee', milk: { hot: 1, cond: 2, evap: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
+  { name: 'น้ำแดงโซดา ซีลฝา', who: 'ไรเดอร์โจ้', skin: '#b98258', hair: '#231c17', top: '#2a9d8f', quote: 'ไรเดอร์ครับ น้ำแดงโซดาใส่แก้วซีลฝา หวานน้อย', base: 'red', milk: { syrup: 1, soda: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
   // Phase 4: shots pulled on the espresso machine.
-  { name: 'เอสเพรสโซ่เย็น', who: 'พี่โอ๊ต', skin: '#d9a67c', hair: '#17110d', top: '#1d3557', quote: 'เอสเพรสโซ่เย็นใส่แก้วครับ หวานปกติ ขอหลอดด้วย', base: 'espresso', milk: { cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup' },
-  { name: 'ลาเต้เย็น', who: 'พี่จูน', skin: '#f3d0ae', hair: '#5a3a22', top: '#e9c46a', quote: 'ลาเต้เย็นใส่แก้วค่ะ นมเยอะ หวานน้อย ขอหลอด', base: 'espresso', milk: { syrup: 1, evap: 2 }, garnish: 'straw', vessel: 'cup' },
-  { name: 'อเมริกาโน่เย็น', who: 'คุณหมอปิง', skin: '#f0c8a4', hair: '#20140e', top: '#a8dadc', quote: 'อเมริกาโน่เย็นใส่แก้ว ไม่หวาน ไม่เอาหลอดครับ', base: 'espresso', milk: { hot: 1 }, garnish: 'none', vessel: 'cup' },
-  { name: 'อเมริกาโน่มะนาว', who: 'พี่กิ๊ฟ', skin: '#e9bf98', hair: '#2a1a10', top: '#90be6d', quote: 'อเมริกาโน่มะนาวใส่แก้วค่ะ หวานน้อย เปรี้ยวนิดๆ ขอหลอด', base: 'espresso', milk: { hot: 1, syrup: 1, lemon: 1 }, garnish: 'straw', vessel: 'cup' },
-  { name: 'ลาเต้เย็น ซีลฝา', who: 'ไรเดอร์แบม', skin: '#c99068', hair: '#231c17', top: '#2a9d8f', quote: 'ไรเดอร์ค่ะ ลาเต้เย็นใส่แก้วซีลฝา นมเยอะ หวานน้อย ขอหลอด', base: 'espresso', milk: { syrup: 1, evap: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
+  { name: 'เอสเพรสโซ่เย็น', who: 'พี่โอ๊ต', skin: '#d9a67c', hair: '#17110d', top: '#1d3557', quote: 'เอสเพรสโซ่เย็นใส่แก้วครับ หวานปกติ', base: 'espresso', milk: { cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'ลาเต้เย็น', who: 'พี่จูน', skin: '#f3d0ae', hair: '#5a3a22', top: '#e9c46a', quote: 'ลาเต้เย็นใส่แก้วค่ะ นมเยอะ หวานน้อย', base: 'espresso', milk: { syrup: 1, evap: 2 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'อเมริกาโน่เย็น', who: 'คุณหมอปิง', skin: '#f0c8a4', hair: '#20140e', top: '#a8dadc', quote: 'อเมริกาโน่เย็นใส่แก้ว ไม่หวาน', base: 'espresso', milk: { hot: 1 }, garnish: 'none', vessel: 'cup' },
+  { name: 'อเมริกาโน่มะนาว', who: 'พี่กิ๊ฟ', skin: '#e9bf98', hair: '#2a1a10', top: '#90be6d', quote: 'อเมริกาโน่มะนาวใส่แก้วค่ะ หวานน้อย เปรี้ยวนิดๆ', base: 'espresso', milk: { hot: 1, syrup: 1, lemon: 1 }, garnish: 'straw', vessel: 'cup' },
+  { name: 'ลาเต้เย็น ซีลฝา', who: 'ไรเดอร์แบม', skin: '#c99068', hair: '#231c17', top: '#2a9d8f', quote: 'ไรเดอร์ค่ะ ลาเต้เย็นใส่แก้วซีลฝา นมเยอะ หวานน้อย', base: 'espresso', milk: { syrup: 1, evap: 2 }, garnish: 'straw', vessel: 'cup', sealed: true },
 ];
 
-export const ORDERS: Order[] = ORDER_SPECS.map((o) => ({ ...o, ice: COOLER_ICE, pearls: o.pearls ?? false, whip: o.whip ?? false, sealed: o.sealed ?? false, milk: { ...noAdditions(), ...o.milk } }));
+/** A drink this short of liquid leaves the cup looking half empty. */
+const FULL_CUP_ML = 145;
+
+/** Drinks made up with hot water get as many pumps as it takes to fill the cup, so the recipe says so. */
+function fillWithHot(o: Order): Order {
+  if (!o.milk.hot) return o;
+  while (drinkMl(o as unknown as Drink) < FULL_CUP_ML && o.milk.hot < MAX_PER_ADDITION) o.milk.hot++;
+  return o;
+}
+
+export const ORDERS: Order[] = ORDER_SPECS.map((o) => fillWithHot({ ...o, ice: COOLER_ICE, pearls: o.pearls ?? false, whip: o.whip ?? false, sealed: o.sealed ?? false, milk: { ...noAdditions(), ...o.milk } }));
 
 /** A cup sells for this much, more for premium bases and extras. */
 const PRICE = 45;
@@ -199,7 +209,6 @@ export function score(s: Drink, o: Order): Score {
     { label: 'ส่วนผสมที่เติม', got: addsRight * 5, max: 30 },
     { label: 'คนให้เข้ากัน', got: Math.round(s.mix * 10), max: 10 },
     { label: 'ภาชนะ', got: s.vessel === o.vessel ? 20 : 0, max: 20 },
-    { label: 'หลอด', got: s.garnish === o.garnish ? 15 : 0, max: 15 },
   ];
   if (o.pearls || s.pearls) rows.push({ label: 'ไข่มุก', got: s.pearls === o.pearls ? 10 : 0, max: 10 });
   if (o.whip || s.whip) rows.push({ label: 'วิปครีม', got: s.whip === o.whip ? 10 : 0, max: 10 });
@@ -274,7 +283,6 @@ export function askLine(o: Order, sweet: SweetAsk | null, noIce: boolean): strin
   if (o.pearls) bits.push('ใส่ไข่มุก');
   if (o.whip) bits.push('โปะวิปครีม');
   if (o.sealed) bits.push('ซีลฝาด้วย');
-  bits.push(o.garnish === 'straw' ? 'ขอหลอดด้วย' : 'ไม่เอาหลอด');
   return bits.join(' ');
 }
 
@@ -303,7 +311,7 @@ export interface Paradox {
   ignoreGripe: string;
 }
 
-const mk = (spec: OrderSpec): Order => ({ ...spec, ice: COOLER_ICE, pearls: spec.pearls ?? false, whip: spec.whip ?? false, sealed: spec.sealed ?? false, milk: { ...noAdditions(), ...spec.milk } });
+const mk = (spec: OrderSpec): Order => fillWithHot({ ...spec, ice: COOLER_ICE, pearls: spec.pearls ?? false, whip: spec.whip ?? false, sealed: spec.sealed ?? false, milk: { ...noAdditions(), ...spec.milk } });
 const variant = (o: Order, change: Change): Order => ({ ...o, ...change, milk: { ...o.milk, ...(change.milk ?? {}) } });
 
 function paradox(spec: OrderSpec, quote: string, p: Omit<Paradox, 'order' | 'quote' | 'literal' | 'sensible'> & { literal: Change; sensible: Change }): Paradox {
@@ -314,7 +322,7 @@ function paradox(spec: OrderSpec, quote: string, p: Omit<Paradox, 'order' | 'quo
 export const PARADOXES: Paradox[] = [
   paradox(
     { name: 'นมชมพู', who: 'น้องเฟิร์น', skin: '#f3cba8', hair: '#2a1b12', top: '#ffafcc', quote: '', base: 'red', milk: { cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup' },
-    'นมชมพูใส่แก้วค่ะ ไม่หวานนะคะ ลดน้ำหนักอยู่ ขอหลอด',
+    'นมชมพูใส่แก้วค่ะ ไม่หวานนะคะ ลดน้ำหนักอยู่',
     {
       literal: { milk: { cond: 0 } },
       literalTag: 'ไม่ใส่นมข้น',
@@ -329,7 +337,7 @@ export const PARADOXES: Paradox[] = [
   ),
   paradox(
     { name: 'ชาเย็น', who: 'ลุงเปี๊ยก', skin: '#b98258', hair: '#8a8a8a', top: '#f4a261', quote: '', base: 'tea', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'carrier' },
-    'ชาเย็นใส่ถุงหิ้ว หวานน้อย แต่ขอหวานๆ นะ ขอหลอดด้วย',
+    'ชาเย็นใส่ถุงหิ้ว หวานน้อย แต่ขอหวานๆ นะ',
     {
       literal: { milk: { cond: 1 } },
       literalTag: 'หวานน้อย',
@@ -344,7 +352,7 @@ export const PARADOXES: Paradox[] = [
   ),
   paradox(
     { name: 'น้ำแดงโซดา', who: 'น้องกัปตัน', skin: '#f2c9a5', hair: '#1f140d', top: '#3d8bd1', quote: '', base: 'red', milk: { syrup: 1, soda: 2 }, garnish: 'straw', vessel: 'cup' },
-    'น้ำแดงโซดาใส่แก้วครับ ไม่เอาซ่านะ ขอหลอด',
+    'น้ำแดงโซดาใส่แก้วครับ ไม่เอาซ่านะ',
     {
       literal: { milk: { soda: 0 } },
       literalTag: 'ไม่ใส่โซดา',
@@ -359,7 +367,7 @@ export const PARADOXES: Paradox[] = [
   ),
   paradox(
     { name: 'ชาเย็น', who: 'พี่ตูน', skin: '#e9bf98', hair: '#2a1a10', top: '#2a9d8f', quote: '', base: 'tea', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup' },
-    'ชาเย็นใส่แก้วครับ ไม่เอาน้ำแข็ง แต่ขอเย็นๆ นะ ขอหลอด',
+    'ชาเย็นใส่แก้วครับ ไม่เอาน้ำแข็ง แต่ขอเย็นๆ นะ',
     {
       literal: { ice: 'none' },
       literalTag: NO_ICE_TAG,
@@ -374,7 +382,7 @@ export const PARADOXES: Paradox[] = [
   ),
   paradox(
     { name: 'อเมริกาโน่เย็น', who: 'พี่เต๋า', skin: '#f0c8a4', hair: '#17110d', top: '#1d3557', quote: '', base: 'espresso', milk: { hot: 1 }, garnish: 'none', vessel: 'cup' },
-    'อเมริกาโน่เย็นใส่นมครับ ไม่เอาหลอด',
+    'อเมริกาโน่เย็นใส่นมครับ',
     {
       literal: { milk: { evap: 1 } },
       literalTag: 'ใส่คาร์เนชั่น',
