@@ -333,17 +333,6 @@ export class DrinkStage {
       }
     }
     g.add(nubs);
-    const r = rng(31);
-    const grains = new T.InstancedMesh(new T.IcosahedronGeometry(0.016, 0), new T.MeshStandardMaterial({ color: 0xfff8ea, roughness: 0.4 }), 90);
-    for (let i = 0; i < 90; i++) {
-      const a = r() * 6.28;
-      const q = 0.5 + r() * 1.5;
-      d.position.set(Math.cos(a) * q, 0.082, Math.sin(a) * q * 0.7 + 0.1);
-      d.rotation.set(r() * 3, r() * 3, 0);
-      d.updateMatrix();
-      grains.setMatrixAt(i, d.matrix);
-    }
-    g.add(grains);
     return g;
   }
 
