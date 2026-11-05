@@ -286,3 +286,9 @@ img { max-width: 100%; }
 @keyframes ding-in { from { transform: translateY(-8px) scale(.9); opacity: 0; } }
 #result-card .close { position: absolute; top: 4px; right: 6px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer; }
 #result-card .close:hover { background: #0001; }
+#top-right { display: flex; gap: 8px; align-items: center; }
+#rating { font-size: 14px; font-weight: 500; color: #ffe9c4; background: #1a0f08cc; border: 1px solid #f2c14e44; padding: 6px 14px; border-radius: 99px; font-variant-numeric: tabular-nums; }
+#result-card .kicker { font-size: 12px; letter-spacing: .04em; color: #7a5a3a; }
+#verdict.stars { color: #e0a21b; letter-spacing: 2px; font-family: inherit; }
+@media (max-width: 760px) { #rating { font-size: 12px; padding: 4px 10px; } }
+#day-card:not(.intro) .stats { grid-template-columns: repeat(5, 1fr); }

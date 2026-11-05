@@ -58,6 +58,8 @@ export interface RunStats {
   served: number;
   walked: number;
   perfect: number;
+  stars: number;
+  reviews: number;
   earned: number;
   fakeCaught: number;
   fakeMissed: number;
@@ -68,7 +70,7 @@ export interface RunStats {
   asked: number;
   fined: number;
 }
-export const noStats = (): RunStats => ({ served: 0, walked: 0, perfect: 0, earned: 0, fakeCaught: 0, fakeMissed: 0, fakeLost: 0, wrongAccuse: 0, paradoxes: 0, explained: 0, asked: 0, fined: 0 });
+export const noStats = (): RunStats => ({ served: 0, walked: 0, perfect: 0, stars: 0, reviews: 0, earned: 0, fakeCaught: 0, fakeMissed: 0, fakeLost: 0, wrongAccuse: 0, paradoxes: 0, explained: 0, asked: 0, fined: 0 });
 
 export interface Save {
   day: number;

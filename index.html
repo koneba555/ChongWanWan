@@ -16,7 +16,10 @@
     <canvas id="garland" aria-hidden="true"></canvas>
     <div id="top">
       <div id="brand"><small>ชงหวานหวาน · รถเข็นหน้าโรงเรียน</small><b>วันที่ <span id="day">1</span> · ลูกค้า <span id="order-no">0</span>/<span id="day-total">8</span></b></div>
-      <div id="money"><span id="money-n">0</span> บาท</div>
+      <div id="top-right">
+        <div id="rating" title="คะแนนร้านบนแผนที่"><span id="rating-n">ยังไม่มีรีวิว</span></div>
+        <div id="money"><span id="money-n">0</span> บาท</div>
+      </div>
     </div>
     <aside id="orders" aria-label="ออเดอร์ที่รออยู่"></aside>
     <div id="tag" hidden></div>
@@ -50,6 +53,7 @@
         <button type="button" id="dev-espresso">ลูกค้าคนแรกสั่งเมนูเอสเพรสโซ่</button>
         <button type="button" id="dev-paradox">ลูกค้าคนแรกสั่งออเดอร์ย้อนแย้ง</button>
         <button type="button" id="dev-noice">ลูกค้าคนแรกไม่เอาน้ำแข็ง</button>
+        <button type="button" id="dev-serve">ส่งแก้ว (สลับถูก/ผิด)</button>
         <button type="button" id="dev-slip">ลูกค้ายื่นสลิปปลอม</button>
         <button type="button" id="dev-coins">เด็กจ่ายเหรียญ</button>
         <button type="button" id="dev-raid">เทศกิจมา</button>

@@ -26,6 +26,10 @@ import {
   dayIntro,
   drinkMl,
   orderPrice,
+  REVIEWS,
+  WALKOUT_REVIEWS,
+  ACCUSED_REVIEW,
+  starText,
   plainName,
   rankOf,
   recipeOf,
@@ -78,9 +82,10 @@ const NO_ICE_SHARE = 0.25;
 const PARADOXES_PER_DAY = 2;
 /** An iceless drink left half full: the share of customers who complain, and the pay they keep. */
 const HALF_CUP_GRIPE = 0.6;
-const HALF_CUP_KEEP = 2 / 3;
 /** Tip from a no-ice customer whose cup was topped up to the brim. */
 const FULL_CUP_TIP = 5;
+/** Share of customers who walk off and then post a one-star review. */
+const WALKOUT_REVIEW_SHARE = 0.5;
 /** Asking a customer to say their order again costs this share of their patience. */
 const REPEAT_COST = 0.15;
 /** Seconds between spoken orders floating across the top, so they never pile up. */
@@ -118,7 +123,8 @@ interface Customer {
   answer?: ParadoxAnswer;
   reply?: string;
   /** Share of the pay kept, and what the customer says, when the answer let them down. */
-  gripe?: { keep: number; line: string };
+  /** Stars knocked off the review, and what the customer grumbles. */
+  gripe?: { drop: number; line: string };
   /** Only asks prices and leaves; nothing to make. */
   browse?: boolean;
   patience: number;
@@ -208,6 +214,16 @@ export function startGame(stage: DrinkStage): void {
   const trayCount = () => tray.filter(Boolean).length;
   const persist = () => writeSave({ day, money, owned: [...owned], stats, regulars });
   const showMoney = () => ($('#money-n').textContent = String(money));
+  const rating = () => (stats.reviews ? stats.stars / stats.reviews : 0);
+  const showRating = () => ($('#rating-n').textContent = stats.reviews ? `★ ${rating().toFixed(1)} (${stats.reviews} รีวิว)` : 'ยังไม่มีรีวิว');
+  /** A customer posts a review on the shop's map page; the shop's stars are the average of them all. */
+  const postReview = (stars: number) => {
+    stats.stars += stars;
+    stats.reviews++;
+    showRating();
+    persist();
+  };
+  const pick = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
   let dingTimer = 0;
   /** A short note that pops up by the money: the sound box reading out a payment, or what a customer says. */
   const toast = (text: string) => {
@@ -609,11 +625,11 @@ export function startGame(stage: DrinkStage): void {
     if (a === 'literal') {
       c.order = p.literal;
       c.tags = [p.literalTag];
-      c.gripe = { keep: 0.5, line: p.literalGripe };
+      c.gripe = { drop: 1, line: p.literalGripe };
       c.reply = 'ได้ค่ะ ทำตามสั่งเลย';
     } else if (a === 'ignore') {
       c.order = p.order;
-      c.gripe = { keep: 1 / 3, line: p.ignoreGripe };
+      c.gripe = { drop: 2, line: p.ignoreGripe };
       c.reply = '(ทำเป็นไม่ได้ยิน ชงสูตรปกติ)';
     } else if (Math.random() < STUBBORN) {
       // Some customers dig in; they get what they asked for and are happy with it.
@@ -708,7 +724,9 @@ export function startGame(stage: DrinkStage): void {
       li.append(el('span', { text: row.label }), el('b', { text: `${row.got}/${row.max}` }));
       list.append(li);
     });
-    resultCard.append(el('div', { id: 'verdict', text: title }), el('div', { id: 'earn', text: line }), list);
+    const review = /^[★☆]/.test(title);
+    if (review) resultCard.append(el('small', { className: 'kicker', text: 'รีวิวใหม่บนแผนที่' }));
+    resultCard.append(el('div', { id: 'verdict', className: review ? 'stars' : '', text: title }), el('div', { id: 'earn', text: line }), list);
     const close = el('button', { className: 'close', text: '×' });
     close.type = 'button';
     close.setAttribute('aria-label', 'ปิดรีวิว');
@@ -730,27 +748,30 @@ export function startGame(stage: DrinkStage): void {
     const c = waiting[slot];
     if (!c) return;
     const r = score(given, c.order);
-    let pay = r.pay;
+    // Nobody pays less for a drink they don't like; they pay the price and take it out on the review.
+    const pay = orderPrice(c.order);
+    let stars = r.stars;
     const said: string[] = [];
-    if (pay && c.gripe) {
-      pay = Math.round(pay * c.gripe.keep);
+    if (c.gripe) {
+      stars -= c.gripe.drop;
       said.push(c.gripe.line);
     }
     // A no-ice drink left half full may get a complaint; topped up, it gets thanks.
-    const iceless = pay > 0 && c.order.ice === 'none' && given.ice === 'none';
+    const iceless = c.order.ice === 'none' && given.ice === 'none';
     let full = 0;
     if (iceless && given.topped) {
       full = FULL_CUP_TIP;
       said.push('เต็มแก้วเลย ใจดีจัง');
     } else if (iceless && Math.random() < HALF_CUP_GRIPE) {
-      pay = Math.round(pay * HALF_CUP_KEEP);
+      stars--;
       said.push('จ่ายเท่าเดิม ได้ครึ่งแก้ว?!');
     } else if (iceless) {
       said.push('เอ๊ะ ครึ่งแก้ว... ช่างเถอะ');
     }
-    const quick = r.total >= 70 && c.patience / c.total > QUICK_TIP_SHARE ? QUICK_TIP : 0;
+    stars = Math.max(1, Math.min(5, stars));
+    const quick = stars >= 4 && c.patience / c.total > QUICK_TIP_SHARE ? QUICK_TIP : 0;
     const lime = owned.has('lime') && c.order.milk.lemon > 0 && given.milk.lemon === c.order.milk.lemon ? LIME_TIP : 0;
-    const tip = pay ? quick + lime + full : 0;
+    const tip = stars >= 4 ? quick + lime + full : 0;
     today.served++;
     stats.served++;
     if (r.total >= 100) {
@@ -760,15 +781,17 @@ export function startGame(stage: DrinkStage): void {
       if (idx >= 0 && !regulars.includes(idx)) regulars.push(idx);
     }
     const tipText = tip ? ` · ทิป ${tip}${lime ? ` (มะนาวสด ${lime})` : ''}` : '';
-    const words = said.length ? `\n${c.order.who}: "${said.join(' ')}"` : '';
+    postReview(stars);
+    const words = `\n"${said.length ? said.join(' ') : pick(REVIEWS[stars])}"`;
+    const title = starText(stars);
     const amount = pay + tip;
     const kind: PayKind = day >= 6 && c.order.who.startsWith('น้อง') && Math.random() < COIN_SHARE ? 'coins' : 'slip';
-    if (!amount || kidHere() || (kind === 'slip' && owned.has('soundbox'))) {
-      if (amount) receive(pay, tip);
-      if (amount && owned.has('soundbox') && !kidHere()) ding(amount);
-      showResult(r.verdict, `${c.order.who} · ${pay ? `+${pay} บาท${tipText}` : 'ไม่ได้เงิน'}${words}`, r.rows);
+    if (kidHere() || (kind === 'slip' && owned.has('soundbox'))) {
+      receive(pay, tip);
+      if (owned.has('soundbox') && !kidHere()) ding(amount);
+      showResult(title, `${c.order.who} · +${pay} บาท${tipText}${words}`, r.rows);
     } else {
-      showResult(r.verdict, `${c.order.who} · ${kind === 'slip' ? 'ยื่นสลิปจ่าย' : 'จ่ายเหรียญ'} ${amount} บาท${words}`, r.rows);
+      showResult(title, `${c.order.who} · ${kind === 'slip' ? 'ยื่นสลิปจ่าย' : 'จ่ายเหรียญ'} ${amount} บาท${words}`, r.rows);
       const fake: Fake | null =
         kind === 'slip' ? (day >= 4 && Math.random() < FAKE_SLIP_SHARE ? (['amount', 'name', 'date'] as const)[Math.floor(Math.random() * 3)] : null) : Math.random() < SHORT_COIN_SHARE ? 'short' : null;
       collect(c.order, kind, fake, pay, tip);
@@ -821,6 +844,8 @@ export function startGame(stage: DrinkStage): void {
         } else {
           stats.wrongAccuse++;
           receive(pay, tip);
+          postReview(1);
+          showResult(starText(1), `${o.who}\n"${ACCUSED_REVIEW}"`, []);
           toast(`${o.who}: "${kind === 'slip' ? 'โอนแล้วจริงๆ ดูดีๆ สิ!' : 'นับดีๆ สิ ครบแล้วนะ!'}"`);
         }
         persist();
@@ -898,7 +923,11 @@ export function startGame(stage: DrinkStage): void {
     }
     today.walked++;
     stats.walked++;
-    showResult('รอนานเกินไป', `${c.order.who} เดินออกไปแล้ว`, []);
+    // Not everyone who walks off bothers to post, but those who do give one star.
+    if (Math.random() < WALKOUT_REVIEW_SHARE) {
+      postReview(1);
+      showResult(starText(1), `${c.order.who} เดินออกไปแล้ว\n"${pick(WALKOUT_REVIEWS)}"`, []);
+    } else showResult('รอนานเกินไป', `${c.order.who} เดินออกไปแล้ว`, []);
     customerDone(slot);
   }
 
@@ -1016,6 +1045,7 @@ export function startGame(stage: DrinkStage): void {
     day = s.day;
     money = s.money;
     stats = noStats();
+    showRating();
     regulars.length = 0;
     owned.clear();
     table.applyUpgrades(owned);
@@ -1033,6 +1063,7 @@ export function startGame(stage: DrinkStage): void {
     const grid = el('div', { className: 'stats' });
     ([
       ['เสิร์ฟ', stats.served],
+      ['คะแนนร้าน', stats.reviews ? `★ ${rating().toFixed(1)}` : '-'],
       ['ชงเป๊ะ', stats.perfect],
       ['เดินหนี', stats.walked],
       ['รายได้รวม', stats.earned],
@@ -1067,7 +1098,7 @@ export function startGame(stage: DrinkStage): void {
     dayCard.classList.remove('intro');
     dayCard.append(el('h2', { text: `ปิดร้าน วันที่ ${closed}` }));
     const stats = el('div', { className: 'stats' });
-    ([['เสิร์ฟ', `${today.served}`], ['เดินหนี', `${today.walked}`], ['รายได้', `${today.earned}`], ['ทิป', `${today.tips}`]] as const).forEach(([label, value]) => {
+    ([['เสิร์ฟ', `${today.served}`], ['เดินหนี', `${today.walked}`], ['รายได้', `${today.earned}`], ['ทิป', `${today.tips}`], ['คะแนนร้าน', rating() ? `★ ${rating().toFixed(1)}` : '-']] as const).forEach(([label, value]) => {
       const box = el('div');
       box.append(el('b', { text: value }), el('span', { text: label }));
       stats.append(box);
@@ -1245,6 +1276,7 @@ export function startGame(stage: DrinkStage): void {
 
   drawGarland(garland);
   showMoney();
+  showRating();
   stage.layout();
   if (day > LAST_DAY) renderFinal();
   else showIntro();
@@ -1254,6 +1286,7 @@ export function startGame(stage: DrinkStage): void {
   if (import.meta.env.DEV || new URLSearchParams(location.search).has('dev')) {
     const panel = $('#dev-panel');
     const tools = $('#dev-tools');
+    let devServes = 0;
     $('#dev-toggle').addEventListener('click', () => {
       tools.hidden = !tools.hidden;
       $('#dev-toggle').setAttribute('aria-expanded', String(!tools.hidden));
@@ -1315,6 +1348,16 @@ export function startGame(stage: DrinkStage): void {
         waiting.forEach((c) => c && (c.patience = Math.min(c.patience, 5)));
       },
       'dev-reset': resetRun,
+      'dev-serve': () => {
+        const slot = waiting.findIndex(Boolean);
+        const c = waiting[slot];
+        if (!c) return;
+        // Hands over the order as made, or with one thing wrong every other press.
+        devServes++;
+        const given: Drink = { ...blankDrink(), ...c.order, milk: { ...c.order.milk }, mix: 1, poured: true, topped: false };
+        if (devServes % 2 === 0) given.vessel = given.vessel === 'cup' ? 'carrier' : 'cup';
+        handOver(slot, given);
+      },
       'dev-slip': () => {
         const c = waiting.find(Boolean);
         if (c) collect(c.shown, 'slip', (['amount', 'name', 'date'] as const)[Math.floor(Math.random() * 3)], 45, 0);

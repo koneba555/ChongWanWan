@@ -198,9 +198,24 @@ export interface ScoreRow {
 export interface Score {
   rows: ScoreRow[];
   total: number;
-  pay: number;
-  verdict: string;
+  /** The stars the drink itself earns on the shop's map review, before any grumbling. */
+  stars: number;
 }
+
+/** Stars a drink earns from how close it came to the order, out of 100. */
+export const starsFor = (total: number) => (total >= 100 ? 5 : total >= 85 ? 4 : total >= 65 ? 3 : total >= 40 ? 2 : 1);
+
+/** What customers write on the map review, by stars. */
+export const REVIEWS: Record<number, string[]> = {
+  5: ['อร่อยมาก หวานมันกำลังดี จะมาอีกแน่นอน', 'ชงเป๊ะทุกแก้ว ให้ห้าดาวเลย', 'ร้านประจำหน้าโรงเรียน ไม่เคยผิดหวัง'],
+  4: ['อร่อยดี แต่ไม่ถึงกับว้าว', 'โอเคเลย ไว้มาอุดหนุนอีก', 'รสชาติดี เกือบเป๊ะแล้ว'],
+  3: ['ก็พอกินได้ ไม่ค่อยตรงที่สั่ง', 'งั้นๆ แหละ ราคานี้', 'กลางๆ ไม่มีอะไรพิเศษ'],
+  2: ['สั่งอย่างได้อีกอย่าง', 'รสชาติแปลกๆ คงไม่มาซ้ำ', 'ไม่เหมือนที่สั่งเลย ต้องเททิ้งครึ่งแก้ว'],
+  1: ['นี่มันไม่ใช่ที่สั่งเลย เสียดายเงิน', 'ไม่แนะนำ แม่ค้าไม่ฟังที่สั่ง', 'ชงอะไรมาให้กินเนี่ย'],
+};
+export const WALKOUT_REVIEWS = ['รอนานมาก ไม่ได้กินสักแก้ว', 'ยืนรอจนเท้าแข็ง เดินหนีเลย', 'คิวไม่ขยับ แม่ค้าชงช้ามาก'];
+export const ACCUSED_REVIEW = 'โอนแล้วแท้ๆ โดนหาว่าสลิปปลอม ไม่มาอีกแล้ว';
+export const starText = (n: number) => '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n);
 
 export function score(s: Drink, o: Order): Score {
   const addsRight = ADD_IDS.filter((k) => s.milk[k] === o.milk[k]).length;
@@ -216,10 +231,7 @@ export function score(s: Drink, o: Order): Score {
   if (o.ice === 'none' || s.ice === 'none') rows.push({ label: 'น้ำแข็ง', got: s.ice === o.ice ? 10 : 0, max: 10 });
   // Out of 100, whatever rows the order has.
   const total = Math.round((rows.reduce((sum, r) => sum + r.got, 0) / rows.reduce((sum, r) => sum + r.max, 0)) * 100);
-  const price = orderPrice(o);
-  const pay = total >= 100 ? price : total >= 70 ? Math.round((price * 2) / 3) : total >= 40 ? Math.round(price / 3) : 0;
-  const verdict = total >= 100 ? 'ถูกใจมาก' : total >= 70 ? 'พอใช้ได้' : total >= 40 ? 'ยังไม่ใช่' : 'เททิ้งเถอะ';
-  return { rows, total, pay, verdict };
+  return { rows, total, stars: starsFor(total) };
 }
 
 // ---------------------------------------------------------------------------
@@ -406,6 +418,9 @@ export interface RankInput {
   served: number;
   walked: number;
   perfect: number;
+  /** Sum and count of the stars on the shop's map reviews. */
+  stars: number;
+  reviews: number;
   fakeCaught: number;
   fakeMissed: number;
   wrongAccuse: number;
@@ -423,13 +438,13 @@ export interface Rank {
 const SOFT_TOUCH = 3;
 
 export function rankOf(s: RankInput): Rank {
-  const perfect = s.served ? s.perfect / s.served : 0;
+  const rating = s.reviews ? (s.stars / s.reviews - 1) / 4 : 0;
   const kept = s.served + s.walked ? s.served / (s.served + s.walked) : 0;
   const fakes = s.fakeCaught + s.fakeMissed;
   const caught = fakes ? s.fakeCaught / fakes : 1;
   const fair = Math.max(0, caught - s.wrongAccuse * 0.1);
   const listened = s.paradoxes ? s.explained / s.paradoxes : 1;
-  const score = Math.round(perfect * 45 + kept * 25 + fair * 15 + listened * 15);
+  const score = Math.round(rating * 45 + kept * 25 + fair * 15 + listened * 15);
   if (s.fakeMissed >= SOFT_TOUCH) return { score, title: 'สายบุญ โดนโกงจนหมดตัว', line: 'ใครยื่นสลิปมาก็เชื่อหมด ใจดีเกินไปแล้วแม่' };
   if (score >= 85) return { score, title: 'เซียนรถเข็นระดับประเทศ', line: 'ชงแม่น จับสลิปปลอมได้ คุยกับลูกค้ารู้เรื่อง เปิดแฟรนไชส์ได้เลย' };
   if (score >= 70) return { score, title: 'เจ้าแม่ชาเย็นหน้าโรงเรียน', line: 'เด็กนักเรียนต่อคิวยาว ผู้ปกครองยังต้องแวะ' };
