@@ -580,7 +580,8 @@ export class DrinkStage {
     this.paintLiquid(s);
     const ml = drinkMl(s);
     this.cupTarget = s.poured ? 0 : Math.min(0.95, ml / CUP_ML_PER_LEVEL);
-    this.levelTarget = s.poured && ml > 0 ? Math.min(0.95, ml / SERVE_ML) : 0;
+    // Without ice the drink only half fills the vessel, unless it was topped up.
+    this.levelTarget = !s.poured || ml <= 0 ? 0 : s.ice === 'none' ? (s.topped ? 0.95 : Math.min(0.95, ml / SERVE_ML) * 0.55) : Math.min(0.95, ml / SERVE_ML);
     // Dry powder sits in a little heap until hot water goes in.
     const powder = s.base && !s.poured && !baseDissolved(s) ? POWDER[s.base] : undefined;
     this.powder.visible = powder !== undefined;
@@ -827,7 +828,7 @@ export class DrinkStage {
     this.serveScale = 1;
     this.setGarnish('none', true);
     this.setVessel(o.vessel, !o.sealed);
-    this.applyDrink({ base: o.base, milk: o.milk, ice: o.ice, garnish: o.garnish, mix: 1, vessel: o.vessel, poured: true, pearls: o.pearls, whip: o.whip, sealed: o.sealed }, true);
+    this.applyDrink({ base: o.base, milk: o.milk, ice: o.ice, garnish: o.garnish, mix: 1, vessel: o.vessel, poured: true, pearls: o.pearls, whip: o.whip, sealed: o.sealed, topped: false }, true);
 
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(420, 330, false);

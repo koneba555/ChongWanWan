@@ -21,6 +21,8 @@ export interface Drink {
   whip: boolean;
   /** Cup sealed with film by the sealer, instead of a dome lid. */
   sealed: boolean;
+  /** An iceless drink topped up to the brim at extra cost, instead of left half full. */
+  topped: boolean;
 }
 
 export interface Order {
@@ -122,6 +124,7 @@ export const blankDrink = (): Drink => ({
   pearls: false,
   whip: false,
   sealed: false,
+  topped: false,
 });
 
 type OrderSpec = Omit<Order, 'milk' | 'ice' | 'pearls' | 'whip' | 'sealed'> & { milk: Partial<Additions>; pearls?: boolean; whip?: boolean; sealed?: boolean };
@@ -201,6 +204,7 @@ export function score(s: Drink, o: Order): Score {
   if (o.pearls || s.pearls) rows.push({ label: 'ไข่มุก', got: s.pearls === o.pearls ? 10 : 0, max: 10 });
   if (o.whip || s.whip) rows.push({ label: 'วิปครีม', got: s.whip === o.whip ? 10 : 0, max: 10 });
   if (o.sealed || s.sealed) rows.push({ label: 'ซีลฝา', got: s.sealed === o.sealed ? 10 : 0, max: 10 });
+  if (o.ice === 'none' || s.ice === 'none') rows.push({ label: 'น้ำแข็ง', got: s.ice === o.ice ? 10 : 0, max: 10 });
   // Out of 100, whatever rows the order has.
   const total = Math.round((rows.reduce((sum, r) => sum + r.got, 0) / rows.reduce((sum, r) => sum + r.max, 0)) * 100);
   const price = orderPrice(o);
@@ -208,3 +212,191 @@ export function score(s: Drink, o: Order): Score {
   const verdict = total >= 100 ? 'ถูกใจมาก' : total >= 70 ? 'พอใช้ได้' : total >= 40 ? 'ยังไม่ใช่' : 'เททิ้งเถอะ';
   return { rows, total, pay, verdict };
 }
+
+// ---------------------------------------------------------------------------
+// Days: each day opens with a short story of what is going to happen.
+
+/** The daughter who writes up the tickets and counts the money. */
+export const KID = 'น้องมะปราง';
+
+export interface DayIntro {
+  title: string;
+  story: string;
+  points: string[];
+}
+
+export function dayIntro(day: number): DayIntro {
+  if (day === 1)
+    return {
+      title: 'ลูกสาวช่วยจด',
+      story: `ปิดเทอมวันแรก ${KID}ลูกสาวมานั่งหน้าร้าน ช่วยจดออเดอร์ลงตั๋ว และนับเงินให้ วันนี้ตั้งใจชงอย่างเดียวพอ`,
+      points: ['ออเดอร์พร้อมสูตรขึ้นที่ตั๋วด้านซ้าย', `ลูกค้าจ่ายเงิน ${KID}นับให้เอง ไม่ต้องทอน`, 'ชงไวทันใจ ลูกค้าให้ทิป'],
+    };
+  if (day === 2)
+    return {
+      title: 'ลูกค้าเริ่มสั่งพิเศษ',
+      story: 'ข่าวลือว่ารถเข็นเราชงอร่อย ลูกค้าเลยเริ่มสั่งแบบ "เอาใจฉันหน่อย" และบางคนก็สั่งแบบที่ฟังแล้วงง',
+      points: [
+        'ตั๋วเขียนสูตรปกติไว้ ถ้ามีป้าย "หวานน้อย" ให้ลดนมข้นหรือน้ำเชื่อมลง 1 ส่วน "ไม่หวาน" ไม่ใส่เลย "หวานมาก" เพิ่ม 1 ส่วน',
+        `ลูกค้าไม่เอาน้ำแข็ง กดปุ่ม "ไม่ใส่น้ำแข็ง" ข้างภาชนะ เทแล้วน้ำจะได้ครึ่งแก้ว จะเติมให้เต็ม (ค่าวัตถุดิบ ${TOP_UP_COST} บาท) หรือส่งครึ่งแก้วก็เลือกเอง`,
+        'ระวังออเดอร์ย้อนแย้ง ลูกค้าบางคนสั่งสิ่งที่ทำไม่ได้ ต้องเลือกว่าจะตอบยังไง',
+      ],
+    };
+  return {
+    title: 'ขายต่อไป',
+    story: `${KID}ยังช่วยจดให้ ลูกค้ายังสั่งพิเศษเหมือนเมื่อวาน`,
+    points: ['หวานน้อย ไม่หวาน หวานมาก ต้องปรับสูตรเอง', 'ไม่เอาน้ำแข็ง เลือกเองว่าจะเติมให้เต็มแก้วไหม', 'ออเดอร์ย้อนแย้งยังมีมาเรื่อยๆ'],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Special requests from day 2: sweetness, no ice.
+
+export type SweetAsk = 'less' | 'none' | 'more';
+export const SWEET_TAG: Record<SweetAsk, string> = { less: 'หวานน้อย', none: 'ไม่หวาน', more: 'หวานมาก' };
+export const NO_ICE_TAG = 'ไม่เอาน้ำแข็ง';
+/** Topping an iceless drink up to the brim costs this much in extra ingredients. */
+export const TOP_UP_COST = 10;
+
+const sweetOf = (m: Additions) => m.cond + m.syrup;
+
+/** Menus made at normal sweetness can be asked less, none or more sweet. */
+export const canSweeten = (o: Order) => sweetOf(o.milk) === 2;
+
+/** The order with its sweetness changed: one part less or more of its sweetener, or none at all. */
+export function sweetened(o: Order, ask: SweetAsk): Order {
+  const milk = { ...o.milk };
+  const k: AddId = milk.cond ? 'cond' : 'syrup';
+  if (ask === 'less') milk[k]--;
+  else if (ask === 'more') milk[k]++;
+  else milk.cond = milk.syrup = 0;
+  return { ...o, milk };
+}
+
+/** The menu name without its sweetness words, for a customer who says their own. */
+export const plainName = (o: Order) => o.name.replace(/\s*หวาน\S*/g, '').trim();
+
+/** What a customer with special requests says, built from the order. */
+export function askLine(o: Order, sweet: SweetAsk | null, noIce: boolean): string {
+  const bits = [`${plainName(o)}${VESSEL_ASK[o.vessel]}`];
+  if (sweet) bits.push(SWEET_TAG[sweet]);
+  if (noIce) bits.push(NO_ICE_TAG);
+  if (o.pearls) bits.push('ใส่ไข่มุก');
+  if (o.whip) bits.push('โปะวิปครีม');
+  if (o.sealed) bits.push('ซีลฝาด้วย');
+  bits.push(o.garnish === 'straw' ? 'ขอหลอดด้วย' : 'ไม่เอาหลอด');
+  return bits.join(' ');
+}
+
+// ---------------------------------------------------------------------------
+// Contradictory orders: the customer asks for something that can't be made as said.
+
+export type ParadoxAnswer = 'literal' | 'explain' | 'ignore';
+
+type Change = Partial<Omit<Order, 'milk'>> & { milk?: Partial<Additions> };
+
+export interface Paradox {
+  /** The normal menu, which "ignore" makes and the ticket shows. */
+  order: Order;
+  quote: string;
+  /** Made exactly as said, and what the customer grumbles when they taste it. */
+  literal: Order;
+  literalTag: string;
+  literalGripe: string;
+  /** What the seller says to explain, and the drink the customer agrees to. */
+  explain: string;
+  accept: string;
+  sensible: Order;
+  sensibleTag: string;
+  /** Some customers won't be told; they get the literal drink without complaint. */
+  stubborn: string;
+  ignoreGripe: string;
+}
+
+const mk = (spec: OrderSpec): Order => ({ ...spec, ice: COOLER_ICE, pearls: spec.pearls ?? false, whip: spec.whip ?? false, sealed: spec.sealed ?? false, milk: { ...noAdditions(), ...spec.milk } });
+const variant = (o: Order, change: Change): Order => ({ ...o, ...change, milk: { ...o.milk, ...(change.milk ?? {}) } });
+
+function paradox(spec: OrderSpec, quote: string, p: Omit<Paradox, 'order' | 'quote' | 'literal' | 'sensible'> & { literal: Change; sensible: Change }): Paradox {
+  const order = mk(spec);
+  return { ...p, order, quote, literal: variant(order, p.literal), sensible: variant(order, p.sensible) };
+}
+
+export const PARADOXES: Paradox[] = [
+  paradox(
+    { name: 'นมชมพู', who: 'น้องเฟิร์น', skin: '#f3cba8', hair: '#2a1b12', top: '#ffafcc', quote: '', base: 'red', milk: { cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup' },
+    'นมชมพูใส่แก้วค่ะ ไม่หวานนะคะ ลดน้ำหนักอยู่ ขอหลอด',
+    {
+      literal: { milk: { cond: 0 } },
+      literalTag: 'ไม่ใส่นมข้น',
+      literalGripe: 'ก็ยังหวานอยู่ดีนี่คะ น้ำแดงมันหวาน!',
+      explain: 'นมชมพูไม่หวานไม่ได้นะคะ น้ำแดงหวานในตัว ทำหวานน้อยให้นะคะ',
+      accept: 'อ้าว งั้นหวานน้อยก็ได้ค่ะ',
+      sensible: { milk: { cond: 1 } },
+      sensibleTag: 'หวานน้อย',
+      stubborn: 'ไม่หวานคือไม่หวานค่ะ!',
+      ignoreGripe: 'บอกว่าไม่หวานไงคะ!',
+    },
+  ),
+  paradox(
+    { name: 'ชาเย็น', who: 'ลุงเปี๊ยก', skin: '#b98258', hair: '#8a8a8a', top: '#f4a261', quote: '', base: 'tea', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'carrier' },
+    'ชาเย็นใส่ถุงหิ้ว หวานน้อย แต่ขอหวานๆ นะ ขอหลอดด้วย',
+    {
+      literal: { milk: { cond: 1 } },
+      literalTag: 'หวานน้อย',
+      literalGripe: 'ไหนว่าหวานๆ ไง จืดชืดเลย',
+      explain: 'ตกลงเอาหวานน้อยหรือหวานๆ คะลุง',
+      accept: 'เอาหวานปกตินั่นแหละ',
+      sensible: {},
+      sensibleTag: 'หวานปกติ',
+      stubborn: 'ก็หวานน้อยแบบหวานๆ ไง!',
+      ignoreGripe: 'ก็ได้... แต่บอกหวานน้อยไปแล้วนะ',
+    },
+  ),
+  paradox(
+    { name: 'น้ำแดงโซดา', who: 'น้องกัปตัน', skin: '#f2c9a5', hair: '#1f140d', top: '#3d8bd1', quote: '', base: 'red', milk: { syrup: 1, soda: 2 }, garnish: 'straw', vessel: 'cup' },
+    'น้ำแดงโซดาใส่แก้วครับ ไม่เอาซ่านะ ขอหลอด',
+    {
+      literal: { milk: { soda: 0 } },
+      literalTag: 'ไม่ใส่โซดา',
+      literalGripe: 'อ้าว นี่มันน้ำแดงเฉยๆ นี่ครับ',
+      explain: 'ไม่ซ่าก็เป็นน้ำแดงเฉยๆ นะ ใส่โซดาน้อยให้ไหม',
+      accept: 'โอเคครับ โซดาน้อยก็ได้',
+      sensible: { milk: { soda: 1 } },
+      sensibleTag: 'โซดาน้อย',
+      stubborn: 'ไม่ซ่าแต่เป็นน้ำแดงโซดาครับ!',
+      ignoreGripe: 'ซ่าจนแสบคอเลยครับ!',
+    },
+  ),
+  paradox(
+    { name: 'ชาเย็น', who: 'พี่ตูน', skin: '#e9bf98', hair: '#2a1a10', top: '#2a9d8f', quote: '', base: 'tea', milk: { hot: 1, cond: 2, evap: 1 }, garnish: 'straw', vessel: 'cup' },
+    'ชาเย็นใส่แก้วครับ ไม่เอาน้ำแข็ง แต่ขอเย็นๆ นะ ขอหลอด',
+    {
+      literal: { ice: 'none' },
+      literalTag: NO_ICE_TAG,
+      literalGripe: 'ทำไมมันอุ่นๆ ล่ะครับ',
+      explain: 'ไม่ใส่น้ำแข็งจะไม่เย็นนะคะ ใส่น้ำแข็งให้นะคะ',
+      accept: 'จริงด้วย งั้นใส่น้ำแข็งครับ',
+      sensible: {},
+      sensibleTag: 'ใส่น้ำแข็งปกติ',
+      stubborn: 'ไม่เอาน้ำแข็งแต่เย็นครับ ทำได้แน่!',
+      ignoreGripe: 'บอกไม่เอาน้ำแข็งไงครับ',
+    },
+  ),
+  paradox(
+    { name: 'อเมริกาโน่เย็น', who: 'พี่เต๋า', skin: '#f0c8a4', hair: '#17110d', top: '#1d3557', quote: '', base: 'espresso', milk: { hot: 1 }, garnish: 'none', vessel: 'cup' },
+    'อเมริกาโน่เย็นใส่นมครับ ไม่เอาหลอด',
+    {
+      literal: { milk: { evap: 1 } },
+      literalTag: 'ใส่คาร์เนชั่น',
+      literalGripe: 'รสชาติแปลกๆ นะครับ',
+      explain: 'อเมริกาโน่ใส่นมก็คือลาเต้แล้วค่ะ ทำลาเต้ให้นะคะ',
+      accept: 'อ๋อ งั้นเอาลาเต้ครับ',
+      sensible: { milk: { hot: 0, syrup: 1, evap: 2 } },
+      sensibleTag: 'เปลี่ยนเป็นลาเต้',
+      stubborn: 'ไม่ใช่ลาเต้ อเมริกาโน่ใส่นมครับ',
+      ignoreGripe: 'ไหนนมล่ะครับ',
+    },
+  ),
+];
+/** Share of customers who won't be talked round. */
+export const STUBBORN = 0.2;

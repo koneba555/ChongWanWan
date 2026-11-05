@@ -83,6 +83,22 @@ img { max-width: 100%; }
 /* Big buttons pinned just in front of the glass they finish, where the eye already is. */
 .under-glass { position: absolute; z-index: 4; transform: translate(-50%, 0); min-width: 190px; padding: 13px 28px; font-size: 19px; box-shadow: 0 0 0 3px var(--gold), 0 8px 20px #0008; }
 .under-glass:hover { transform: translate(-50%, 0) scale(1.04); }
+.beside-glass { position: absolute; z-index: 4; transform: translate(0, -50%); padding: 10px 18px; font-size: 16px; box-shadow: 0 0 0 3px var(--gold), 0 8px 20px #0008; }
+.beside-glass:hover { transform: translate(0, -50%) scale(1.04); }
+.order .tag { display: inline-block; margin: 3px 4px 0 0; padding: 1px 8px; border-radius: 99px; background: var(--gold); color: var(--ink); font-weight: 500; }
+.order .reply { margin-top: 5px; padding: 4px 6px; border-radius: 4px; background: #0003; font-size: 12px; line-height: 1.35; white-space: pre-line; }
+.order .choices { display: grid; gap: 4px; margin-top: 6px; }
+.order .choices button { font: inherit; font-size: 12.5px; text-align: left; padding: 4px 8px; border: 0; border-radius: 4px; background: #fbf3df; color: var(--ink); cursor: pointer; }
+.order .choices button:hover { background: var(--gold); }
+.order.ask { box-shadow: 0 0 0 3px var(--gold), 0 8px 18px #0007; }
+#day-card.intro { text-align: center; }
+#day-card.intro h2 { line-height: 1.6; }
+#day-card .kicker { margin-bottom: 6px; font-size: 15px; line-height: 1.4; font-weight: 500; color: var(--ticket); }
+#day-card .story { margin: 10px 0 12px; font-size: 16px; line-height: 1.6; }
+#day-card .points { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; text-align: left; }
+#day-card .points li { background: #f1e2c2; border-radius: 6px; padding: 8px 12px; font-size: 14px; line-height: 1.5; }
+#day-card .row.end { justify-content: center; }
+#earn { white-space: pre-line; }
 .ghost { background: #1a0f08d9; color: var(--cream); border: 1px solid #fff5df66; border-radius: 99px; padding: 10px 16px; font: 400 15px var(--body); cursor: pointer; }
 .pill:focus-visible, .ghost:focus-visible { outline: 2px solid var(--gold-pale); outline-offset: 2px; }
 
