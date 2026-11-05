@@ -214,40 +214,30 @@ export function score(s: Drink, o: Order): Score {
 }
 
 // ---------------------------------------------------------------------------
-// Days: each day opens with a short story of what is going to happen.
+// Days: each day opens with a short story. It only tells what has changed at the cart,
+// never the rules or surprises the player is about to meet.
 
-/** The daughter who writes up the tickets and counts the money. */
+/** The daughter who writes up the tickets and counts the money, until the day she can't come. */
 export const KID = 'น้องมะปราง';
 
 export interface DayIntro {
   title: string;
   story: string;
-  points: string[];
 }
 
 export function dayIntro(day: number): DayIntro {
-  if (day === 1)
-    return {
-      title: 'ลูกสาวช่วยจด',
-      story: `ปิดเทอมวันแรก ${KID}ลูกสาวมานั่งหน้าร้าน ช่วยจดออเดอร์ลงตั๋ว และนับเงินให้ วันนี้ตั้งใจชงอย่างเดียวพอ`,
-      points: ['ออเดอร์พร้อมสูตรขึ้นที่ตั๋วด้านซ้าย', `ลูกค้าจ่ายเงิน ${KID}นับให้เอง ไม่ต้องทอน`, 'ชงไวทันใจ ลูกค้าให้ทิป'],
-    };
-  if (day === 2)
-    return {
-      title: 'ลูกค้าเริ่มสั่งพิเศษ',
-      story: 'ข่าวลือว่ารถเข็นเราชงอร่อย ลูกค้าเลยเริ่มสั่งแบบ "เอาใจฉันหน่อย" และบางคนก็สั่งแบบที่ฟังแล้วงง',
-      points: [
-        'ตั๋วเขียนสูตรปกติไว้ ถ้ามีป้าย "หวานน้อย" ให้ลดนมข้นหรือน้ำเชื่อมลง 1 ส่วน "ไม่หวาน" ไม่ใส่เลย "หวานมาก" เพิ่ม 1 ส่วน',
-        `ลูกค้าไม่เอาน้ำแข็ง กดปุ่ม "ไม่ใส่น้ำแข็ง" ข้างภาชนะ เทแล้วน้ำจะได้ครึ่งแก้ว จะเติมให้เต็ม (ค่าวัตถุดิบ ${TOP_UP_COST} บาท) หรือส่งครึ่งแก้วก็เลือกเอง`,
-        'ระวังออเดอร์ย้อนแย้ง ลูกค้าบางคนสั่งสิ่งที่ทำไม่ได้ ต้องเลือกว่าจะตอบยังไง',
-      ],
-    };
-  return {
-    title: 'ขายต่อไป',
-    story: `${KID}ยังช่วยจดให้ ลูกค้ายังสั่งพิเศษเหมือนเมื่อวาน`,
-    points: ['หวานน้อย ไม่หวาน หวานมาก ต้องปรับสูตรเอง', 'ไม่เอาน้ำแข็ง เลือกเองว่าจะเติมให้เต็มแก้วไหม', 'ออเดอร์ย้อนแย้งยังมีมาเรื่อยๆ'],
-  };
+  if (day === 1) return { title: 'เปิดร้านวันแรก', story: 'รถเข็นชงหวานหวานเปิดขายหน้าโรงเรียนเป็นวันแรก ลูกค้าเริ่มเดินมาแล้ว' };
+  if (day === 2) return { title: 'ลูกค้าเริ่มติดใจ', story: 'เมื่อวานขายดี วันนี้ลูกค้าเยอะขึ้น แต่ละคนก็มีวิธีสั่งเป็นของตัวเอง' };
+  if (day === 3) return { title: 'ลูกไปเรียนพิเศษ', story: `${KID}ไปเรียนพิเศษทั้งวัน วันนี้ไม่มีใครจดออเดอร์ให้ ต้องฟังลูกค้าสั่งเอง เงินก็ต้องเช็กเอง` };
+  if (day === 4) return { title: 'สิ้นเดือน', story: 'เงินเดือนออก คนเยอะ ทุกคนรีบ' };
+  if (day === 5) return { title: 'กลางสัปดาห์', story: 'ขายมาครึ่งทางแล้ว ร้านเริ่มเข้าที่' };
+  if (day === 6) return { title: 'หน้าคุ้นๆ', story: 'ขายมาเกือบอาทิตย์ ลูกค้าหน้าเดิมเริ่มเยอะ' };
+  if (day === LAST_DAY) return { title: 'วันสุดท้าย', story: 'วันสุดท้ายของการทดสอบ ปิดร้านคืนนี้จะรู้ว่าเป็นแม่ค้าระดับไหน' };
+  return { title: 'ขายต่อ', story: 'อีกวันของรถเข็นหน้าโรงเรียน' };
 }
+
+/** The test runs this many days, then the cart gets its rank. */
+export const LAST_DAY = 7;
 
 // ---------------------------------------------------------------------------
 // Special requests from day 2: sweetness, no ice.
@@ -400,3 +390,42 @@ export const PARADOXES: Paradox[] = [
 ];
 /** Share of customers who won't be talked round. */
 export const STUBBORN = 0.2;
+
+// ---------------------------------------------------------------------------
+// The result after the last day: one score out of 100 and a title to share.
+
+export interface RankInput {
+  served: number;
+  walked: number;
+  perfect: number;
+  fakeCaught: number;
+  fakeMissed: number;
+  wrongAccuse: number;
+  paradoxes: number;
+  explained: number;
+}
+
+export interface Rank {
+  score: number;
+  title: string;
+  line: string;
+}
+
+/** Fake slips accepted from this many on earn the soft-touch title, whatever the score. */
+const SOFT_TOUCH = 3;
+
+export function rankOf(s: RankInput): Rank {
+  const perfect = s.served ? s.perfect / s.served : 0;
+  const kept = s.served + s.walked ? s.served / (s.served + s.walked) : 0;
+  const fakes = s.fakeCaught + s.fakeMissed;
+  const caught = fakes ? s.fakeCaught / fakes : 1;
+  const fair = Math.max(0, caught - s.wrongAccuse * 0.1);
+  const listened = s.paradoxes ? s.explained / s.paradoxes : 1;
+  const score = Math.round(perfect * 45 + kept * 25 + fair * 15 + listened * 15);
+  if (s.fakeMissed >= SOFT_TOUCH) return { score, title: 'สายบุญ โดนโกงจนหมดตัว', line: 'ใครยื่นสลิปมาก็เชื่อหมด ใจดีเกินไปแล้วแม่' };
+  if (score >= 85) return { score, title: 'เซียนรถเข็นระดับประเทศ', line: 'ชงแม่น จับสลิปปลอมได้ คุยกับลูกค้ารู้เรื่อง เปิดแฟรนไชส์ได้เลย' };
+  if (score >= 70) return { score, title: 'เจ้าแม่ชาเย็นหน้าโรงเรียน', line: 'เด็กนักเรียนต่อคิวยาว ผู้ปกครองยังต้องแวะ' };
+  if (score >= 55) return { score, title: 'แม่ค้าดาวรุ่ง', line: 'มีแววรุ่ง อีกนิดเดียวจะติดตลาด' };
+  if (score >= 40) return { score, title: 'มือใหม่หัดชง', line: 'ชงได้ ขายได้ แต่ลูกค้ายังลังเล' };
+  return { score, title: 'ชงไปบ่นไป', line: 'ลูกค้าเดินผ่านแล้วรีบเดินต่อ ลองใหม่อีกรอบนะ' };
+}

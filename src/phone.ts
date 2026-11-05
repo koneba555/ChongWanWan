@@ -4,6 +4,8 @@ import { CATEGORIES, COMING_SOON, UPGRADES, type Category, type Upgrade, type Up
 export interface PhoneShop {
   money(): number;
   owned(): ReadonlySet<UpgradeId>;
+  /** The day the shop is opened on, for what is on sale yet. */
+  day(): number;
   buy(id: UpgradeId): void;
 }
 
@@ -24,6 +26,8 @@ const PICS: Record<string, string> = {
   pearl: '<path d="M20 50 Q50 92 80 50 Z" fill="#f4e6cf"/><g fill="#3a2414"><circle cx="35" cy="54" r="6"/><circle cx="48" cy="58" r="6"/><circle cx="61" cy="54" r="6"/><circle cx="42" cy="66" r="6"/><circle cx="56" cy="66" r="6"/><circle cx="50" cy="48" r="6"/></g>',
   sealer: '<rect x="18" y="40" width="64" height="44" rx="6" fill="#e6e1d6"/><rect x="30" y="14" width="40" height="30" rx="5" fill="#d8312a"/><rect x="40" y="58" width="20" height="24" fill="#bfe6f0" stroke="#9cc"/>',
   blender: '<rect x="30" y="70" width="40" height="20" rx="5" fill="#5b5f66"/><circle cx="50" cy="80" r="4" fill="#7fe08a"/><path d="M32 22 h36 l-5 48 h-26 z" fill="#dff3f7" stroke="#8fb8c2" stroke-width="2"/><path d="M35 45 h30 l-3 25 h-24 z" fill="#ff9f43"/><rect x="30" y="14" width="40" height="9" rx="3" fill="#5b5f66"/>',
+  soundbox: '<rect x="22" y="30" width="56" height="52" rx="8" fill="#1f6feb"/><circle cx="50" cy="52" r="14" fill="#0d3b8a"/><circle cx="50" cy="52" r="6" fill="#9cc3ff"/><rect x="30" y="72" width="40" height="5" rx="2" fill="#9cc3ff"/><path d="M80 40 q8 12 0 24 M86 34 q14 18 0 36" stroke="#ff5a24" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  call: '<rect x="32" y="10" width="36" height="78" rx="7" fill="#2b2b2b"/><rect x="36" y="18" width="28" height="56" rx="2" fill="#7fe08a"/><path d="M43 38 q2 -6 6 -3 l2 4 q-2 3 2 7 q4 4 7 2 l4 2 q3 4 -3 6 q-10 2 -18 -18 z" fill="#fff"/>',
   espresso: '<rect x="18" y="16" width="64" height="70" rx="6" fill="#b8231d"/><rect x="18" y="16" width="64" height="16" rx="6" fill="#5b5f66"/><rect x="40" y="38" width="20" height="8" rx="3" fill="#2b2b2b"/><rect x="40" y="62" width="20" height="16" rx="3" fill="#fff"/><path d="M60 66 h6 v6 h-6" fill="none" stroke="#fff" stroke-width="2"/>',
 };
 
@@ -181,7 +185,7 @@ export class Phone {
 
     const match = (name: string, cat: Category) => (this.category === 'all' || cat === this.category) && name.includes(q);
     const grid = el('div', 'grid');
-    UPGRADES.filter((u) => match(u.name, u.category)).forEach((u) => {
+    UPGRADES.filter((u) => (u.from ?? 1) <= this.shop.day() && match(u.name, u.category)).forEach((u) => {
       const has = this.shop.owned().has(u.id);
       const card = el('button', `card${has ? ' owned' : ''}`, `
         <div class="pic">${pic(u.id)}<span class="badge off">-${off(u)}%</span>${has ? '<span class="stamp">ซื้อแล้ว</span>' : ''}</div>
@@ -192,7 +196,8 @@ export class Phone {
       card.addEventListener('click', () => this.go({ page: 'item', id: u.id }));
       grid.append(card);
     });
-    COMING_SOON.filter((c) => match(c.name, c.category)).forEach((c) => {
+    const soon = [...UPGRADES.filter((u) => (u.from ?? 1) > this.shop.day()).map((u) => ({ key: u.id as string, name: u.name, category: u.category, price: u.price })), ...COMING_SOON];
+    soon.filter((c) => match(c.name, c.category)).forEach((c) => {
       grid.append(el('div', 'card soon', `
         <div class="pic">${pic(c.key)}<span class="stamp">เร็วๆ นี้</span></div>
         <div class="name">${c.name}</div>

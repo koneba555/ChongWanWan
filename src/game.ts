@@ -8,6 +8,8 @@ import {
   COOLER_ICE,
   MAX_PER_ADDITION,
   BREWED,
+  KID,
+  LAST_DAY,
   NO_ICE_TAG,
   ORDERS,
   PARADOXES,
@@ -25,6 +27,7 @@ import {
   drinkMl,
   orderPrice,
   plainName,
+  rankOf,
   recipeOf,
   score,
   sweetWord,
@@ -38,8 +41,9 @@ import {
   type SweetAsk,
   type VesselId,
 } from './data';
+import { PayDesk, type Fake, type PayKind } from './pay';
 import { Phone } from './phone';
-import { UPGRADES, clearSave, loadSave, writeSave, type UpgradeId } from './shop';
+import { UPGRADES, clearSave, loadSave, noStats, writeSave, type RunStats, type UpgradeId } from './shop';
 import { CUP_HOME, SERVE_HOME, type DrinkStage } from './stage';
 import { HANG_SLOTS, Table, hookCount, type DropTarget, type TableItem, type TableRules } from './table';
 
@@ -71,6 +75,29 @@ const HALF_CUP_GRIPE = 0.6;
 const HALF_CUP_KEEP = 2 / 3;
 /** Tip from a no-ice customer whose cup was topped up to the brim. */
 const FULL_CUP_TIP = 5;
+/** Asking a customer to say their order again costs this share of their patience. */
+const REPEAT_COST = 0.15;
+/** Seconds between spoken orders floating across the top, so they never pile up. */
+const SPEECH_GAP = 3.2;
+/** From day 4 this share of slips are fake; from day 6 children may pay in coins, sometimes short. */
+const FAKE_SLIP_SHARE = 0.3;
+const COIN_SHARE = 0.6;
+const SHORT_COIN_SHARE = 0.35;
+/** The daughter, when called in, costs this much pocket money a day. */
+const KID_WAGE = 100;
+/** From day 6: a regular asking for the same again, and riders in a hurry. */
+const REGULAR_SHARE = 0.3;
+const RUSH_PATIENCE = 0.6;
+/** The last day: an aunt who only asks prices, and the city officers moving carts on. */
+const AUNT_SECONDS = 16;
+const RAID_SECONDS = 4;
+const RAID_FINE = 100;
+const RAID_WAIT = 8;
+
+const ANNOYED = ['(ถอนหายใจ) ', 'บอกไปแล้วนะ ', 'ฟังดีๆ นะ ', 'รอบสุดท้ายนะ '];
+const CAUGHT: Record<Fake, string> = { amount: 'อุ๊ย พิมพ์ยอดผิด โอนใหม่ให้ละกัน', name: 'แหะๆ โอนผิดร้าน เดี๋ยวโอนใหม่', date: 'อ้าว สลิปเมื่อวาน... โอนให้ใหม่ก็ได้', short: 'จริงด้วย ขาดไป นี่เหรียญที่เหลือ' };
+/** The aunt who asks the price of everything and buys nothing. */
+const AUNT: Order = { ...ORDERS[0], name: 'ถามราคา', who: 'ป้าสมศรี', skin: '#e2b088', hair: '#9a9a9a', top: '#b5838d', quote: 'ชาเย็นแก้วละเท่าไหร่จ๊ะ... แล้วโกโก้ล่ะ... มีไข่มุกไหม... อ้อ ไม่เป็นไรจ้ะ แค่ถามดู' };
 
 interface Customer {
   /** What the drink is scored against, after any special requests. */
@@ -86,6 +113,8 @@ interface Customer {
   reply?: string;
   /** Share of the pay kept, and what the customer says, when the answer let them down. */
   gripe?: { keep: number; line: string };
+  /** Only asks prices and leaves; nothing to make. */
+  browse?: boolean;
   patience: number;
   total: number;
 }
@@ -128,6 +157,11 @@ export function startGame(stage: DrinkStage): void {
   let day = saved.day;
   let money = saved.money;
   const owned = new Set<UpgradeId>(saved.owned);
+  let stats: RunStats = saved.stats;
+  const regulars: number[] = saved.regulars;
+  /** The daughter writes the tickets and counts the money on the first two days, or when called in. */
+  let hired = false;
+  const kidHere = () => day <= 2 || hired;
 
   let drink = blankDrink();
   /** Customers at the cart, by card slot; null once a slot has no one left to come. */
@@ -140,7 +174,15 @@ export function startGame(stage: DrinkStage): void {
   /** Which arrivals of the day bring a contradictory order, and which have come already. */
   const paradoxAt = new Set<number>();
   const paradoxUsed = new Set<Paradox>();
-  const today = { done: 0, served: 0, walked: 0, earned: 0, tips: 0 };
+  const today = { done: 0, served: 0, walked: 0, earned: 0, tips: 0, fakeLost: 0, fakeCount: 0 };
+  /** Seconds the cart has been open today, and when the officers come on the last day. */
+  let dayClock = 0;
+  let raidAt = -1;
+  /** The day is over but a customer is still holding up a slip. */
+  let closing = false;
+  /** Which arrival on the last day is the aunt. */
+  let auntAt = -1;
+  const payDesk = new PayDesk(stageEl);
 
   let stirring = false;
   /** Seconds left on the frother's run; it stirs by itself while above zero. */
@@ -158,13 +200,13 @@ export function startGame(stage: DrinkStage): void {
     hint.textContent = text;
   };
   const trayCount = () => tray.filter(Boolean).length;
-  const persist = () => writeSave({ day, money, owned: [...owned] });
+  const persist = () => writeSave({ day, money, owned: [...owned], stats, regulars });
   const showMoney = () => ($('#money-n').textContent = String(money));
   let dingTimer = 0;
-  /** The QR sound box reads out each payment. */
-  const ding = (amount: number) => {
+  /** A short note that pops up by the money: the sound box reading out a payment, or what a customer says. */
+  const toast = (text: string) => {
     const box = $('#ding');
-    box.textContent = `ได้รับเงิน ${amount} บาท`;
+    box.textContent = text;
     box.hidden = false;
     box.style.animation = 'none';
     void box.offsetWidth;
@@ -172,11 +214,13 @@ export function startGame(stage: DrinkStage): void {
     clearTimeout(dingTimer);
     dingTimer = window.setTimeout(() => (box.hidden = true), 2400);
   };
+  const ding = (amount: number) => toast(`ได้รับเงิน ${amount} บาท`);
 
   // Upgrades are bought on the phone shop app, opened from the end-of-day card.
   const phone = new Phone({
     money: () => money,
     owned: () => owned,
+    day: () => day,
     buy(id) {
       const u = UPGRADES.find((x) => x.id === id);
       if (!u || owned.has(id) || money < u.price) return;
@@ -212,11 +256,17 @@ export function startGame(stage: DrinkStage): void {
         return trayCount()
           ? 'ลากถุงที่แขวนรอส่งด้านบนไปวางบนตั๋วของลูกค้าที่สั่ง หรือเริ่มชงแก้วใหม่'
           : owned.has('espresso') && waiting.some((c) => c?.order.base === 'espresso')
-            ? 'เลือกออเดอร์ทางซ้าย แล้วลากน้ำฐานมาใส่แก้วตวง เมนูเอสเพรสโซ่ให้กดที่เครื่องชงด้านซ้ายหลัง'
-            : 'เลือกออเดอร์ทางซ้าย แล้วลากน้ำฐานมาใส่แก้วตวง';
+            ? `${kidHere() ? 'เลือกออเดอร์ทางซ้าย' : 'ฟังลูกค้าสั่ง'} แล้วลากน้ำฐานมาใส่แก้วตวง เมนูเอสเพรสโซ่ให้กดที่เครื่องชงด้านซ้ายหลัง`
+            : kidHere()
+              ? 'เลือกออเดอร์ทางซ้าย แล้วลากน้ำฐานมาใส่แก้วตวง'
+              : 'ฟังลูกค้าสั่งจากข้อความที่ลอยผ่าน แล้วลากน้ำฐานมาใส่แก้วตวง ลืมก็กด "ห๊ะ อะไรนะคะ" ที่ตั๋วลูกค้า';
       }
       if (BREWED.includes(drink.base) && !drink.milk.hot) {
         return owned.has('kettle') ? 'ชา กาแฟ ต้องชงกับน้ำร้อน กดที่กระติกน้ำร้อนด้านซ้าย' : 'ชา กาแฟ ต้องชงกับน้ำร้อน ลากกาน้ำร้อนด้านซ้ายมาเทลงแก้วตวง';
+      }
+      // Tickets marked with a sweetness say how far to move from the normal recipe.
+      if (drink.mix < 1 && waiting.some((c) => c?.tags.some((t) => t.startsWith('หวาน') || t === 'ไม่หวาน'))) {
+        return 'ตั๋วที่มีป้ายความหวาน ปรับจากสูตรปกติ หวานน้อยลดนมข้นหรือน้ำเชื่อม 1 ส่วน ไม่หวานไม่ใส่เลย หวานมากเพิ่ม 1 ส่วน แล้วคนให้เข้ากัน';
       }
       if (drink.mix < 1) {
         return owned.has('frother')
@@ -454,6 +504,10 @@ export function startGame(stage: DrinkStage): void {
         say('ตอบลูกค้าที่ตั๋วก่อนว่าจะทำยังไง');
         return false;
       }
+      if (c?.browse) {
+        say(`${c.shown.who}แค่ถามราคา ไม่ได้สั่งอะไร`);
+        return false;
+      }
       handOver(Number(card.dataset.slot), entry.drink);
       table.removeItem(item);
       tray[slot] = null;
@@ -488,7 +542,17 @@ export function startGame(stage: DrinkStage): void {
     if (arrived >= DAY_CUSTOMERS) return null;
     arrived++;
     // With the QR stand nobody waits for change, so customers put up with a longer wait.
-    const total = Math.max(PATIENCE_MIN, PATIENCE_START - (day - 1) * PATIENCE_DROP_PER_DAY) * (owned.has('qr') ? QR_PATIENCE : 1);
+    let total = Math.max(PATIENCE_MIN, PATIENCE_START - (day - 1) * PATIENCE_DROP_PER_DAY) * (owned.has('qr') ? QR_PATIENCE : 1);
+    // On the last day one arrival is the aunt who only asks prices.
+    if (day === LAST_DAY && arrived === auntAt) return { order: AUNT, shown: AUNT, quote: AUNT.quote, tags: [], browse: true, patience: AUNT_SECONDS, total: AUNT_SECONDS };
+    // Regulars come back for the drink they loved and expect it remembered.
+    if (day >= 6 && !first && regulars.length && Math.random() < REGULAR_SHARE) {
+      const o = ORDERS[regulars[Math.floor(Math.random() * regulars.length)]];
+      if (o && canMake(o) && !waiting.some((w) => w?.shown === o)) {
+        thumbFor(o);
+        return { order: o, shown: o, quote: 'เอาเหมือนเดิมนะ', tags: [], patience: total, total };
+      }
+    }
     const p = paradoxAt.has(arrived) ? pickParadox() : null;
     if (p) {
       thumbFor(p.order);
@@ -512,7 +576,12 @@ export function startGame(stage: DrinkStage): void {
       }
     }
     const tags = [...(sweet ? [SWEET_TAG[sweet]] : []), ...(noIce ? [NO_ICE_TAG] : [])];
-    return { order, shown, quote: tags.length ? askLine(shown, sweet, noIce) : shown.quote, tags, patience: total, total };
+    let quote = tags.length ? askLine(shown, sweet, noIce) : shown.quote;
+    if (day >= 6 && shown.who.startsWith('ไรเดอร์')) {
+      total *= RUSH_PATIENCE;
+      quote = `เร็วๆ นะ งานรีบ ${quote}`;
+    }
+    return { order, shown, quote, tags, patience: total, total };
   }
 
   /** A contradictory order the cart can make that has not come yet today. */
@@ -529,6 +598,8 @@ export function startGame(stage: DrinkStage): void {
     if (!c?.paradox || c.answer) return;
     const p = c.paradox;
     c.answer = a;
+    stats.paradoxes++;
+    if (a === 'explain') stats.explained++;
     if (a === 'literal') {
       c.order = p.literal;
       c.tags = [p.literalTag];
@@ -560,18 +631,32 @@ export function startGame(stage: DrinkStage): void {
         return;
       }
       const o = c.shown;
-      const card = el('article', { className: `order${i === fresh ? ' new' : ''}${c.paradox && !c.answer ? ' ask' : ''}` });
+      const blind = !kidHere() && !c.browse;
+      const card = el('article', { className: `order${i === fresh ? ' new' : ''}${c.paradox && !c.answer ? ' ask' : ''}${blind ? ' blind' : ''}` });
       card.dataset.slot = String(i);
       const img = el('img');
-      img.src = thumbs.get(o) ?? '';
-      img.alt = `${o.name} ${VESSEL_ASK[o.vessel]}`;
+      img.src = blind || c.browse ? `data:image/svg+xml,${encodeURIComponent(avatarSvg(o).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '))}` : thumbs.get(o) ?? '';
+      img.alt = blind ? o.who : `${o.name} ${VESSEL_ASK[o.vessel]}`;
       const text = el('div');
       const who = el('div', { className: 'who' });
       const face = el('span', { className: 'face' });
       face.innerHTML = avatarSvg(o);
       who.append(face, el('span', { text: `${o.who}: ${c.quote}` }));
-      text.append(el('div', { className: 'name', text: `${c.tags.length || c.paradox ? plainName(o) : o.name} · ${VESSEL_ASK[o.vessel]}` }), who);
-      if (c.paradox && !c.answer) {
+      if (c.browse) {
+        text.append(el('div', { className: 'name', text: 'แค่ถามราคา' }), who);
+      } else if (blind) {
+        // Nobody wrote it down: the seller has to remember what was said, or ask again.
+        text.append(el('div', { className: 'name', text: o.who }));
+        const again = el('button', { className: 'again', text: 'ห๊ะ อะไรนะคะ?' });
+        again.type = 'button';
+        again.addEventListener('click', () => repeat(i));
+        text.append(again);
+      } else {
+        text.append(el('div', { className: 'name', text: `${c.tags.length || c.paradox ? plainName(o) : o.name} · ${VESSEL_ASK[o.vessel]}` }), who);
+      }
+      if (c.browse) {
+        // Nothing to answer or make.
+      } else if (c.paradox && !c.answer) {
         // The seller has to choose how to answer before the ticket shows a recipe.
         const choices = el('div', { className: 'choices' });
         ([['literal', 'ทำตามที่สั่ง'], ['explain', 'อธิบายให้ลูกค้าฟัง'], ['ignore', 'ทำเป็นไม่ได้ยิน ชงปกติ']] as const).forEach(([a, label]) => {
@@ -583,6 +668,8 @@ export function startGame(stage: DrinkStage): void {
         text.append(choices);
       } else {
         if (c.reply) text.append(el('div', { className: 'reply', text: c.reply }));
+      }
+      if (!c.browse && !blind && !(c.paradox && !c.answer)) {
         const recipe = el('div', { className: 'recipe', text: `สูตร${c.tags.length ? 'ปกติ' : ''}: ${recipeOf(o)} · ${orderPrice(o)} บาท` });
         if (c.tags.length) recipe.append(...c.tags.map((t) => el('span', { className: 'tag', text: t })));
         text.append(recipe);
@@ -627,6 +714,7 @@ export function startGame(stage: DrinkStage): void {
   function customerDone(slot: number): void {
     today.done++;
     waiting[slot] = arrive();
+    announce(waiting[slot]);
     renderOrders(slot);
     updateHud();
     if (today.done >= DAY_CUSTOMERS) endDay();
@@ -657,23 +745,153 @@ export function startGame(stage: DrinkStage): void {
     const quick = r.total >= 70 && c.patience / c.total > QUICK_TIP_SHARE ? QUICK_TIP : 0;
     const lime = owned.has('lime') && c.order.milk.lemon > 0 && given.milk.lemon === c.order.milk.lemon ? LIME_TIP : 0;
     const tip = pay ? quick + lime + full : 0;
-    money += pay + tip;
     today.served++;
+    stats.served++;
+    if (r.total >= 100) {
+      stats.perfect++;
+      // A drink made just right turns the customer into a regular.
+      const idx = ORDERS.indexOf(c.shown);
+      if (idx >= 0 && !regulars.includes(idx)) regulars.push(idx);
+    }
+    const tipText = tip ? ` · ทิป ${tip}${lime ? ` (มะนาวสด ${lime})` : ''}` : '';
+    const words = said.length ? `\n${c.order.who}: "${said.join(' ')}"` : '';
+    const amount = pay + tip;
+    const kind: PayKind = day >= 6 && c.order.who.startsWith('น้อง') && Math.random() < COIN_SHARE ? 'coins' : 'slip';
+    if (!amount || kidHere() || (kind === 'slip' && owned.has('soundbox'))) {
+      if (amount) receive(pay, tip);
+      if (amount && owned.has('soundbox') && !kidHere()) ding(amount);
+      showResult(r.verdict, `${c.order.who} · ${pay ? `+${pay} บาท${tipText}` : 'ไม่ได้เงิน'}${words}`, r.rows);
+    } else {
+      showResult(r.verdict, `${c.order.who} · ${kind === 'slip' ? 'ยื่นสลิปจ่าย' : 'จ่ายเหรียญ'} ${amount} บาท${words}`, r.rows);
+      const fake: Fake | null =
+        kind === 'slip' ? (day >= 4 && Math.random() < FAKE_SLIP_SHARE ? (['amount', 'name', 'date'] as const)[Math.floor(Math.random() * 3)] : null) : Math.random() < SHORT_COIN_SHARE ? 'short' : null;
+      collect(c.order, kind, fake, pay, tip);
+    }
+    persist();
+    customerDone(slot);
+  }
+
+  /** Money that has really come in. */
+  function receive(pay: number, tip: number): void {
+    money += pay + tip;
     today.earned += pay;
     today.tips += tip;
+    stats.earned += pay + tip;
     showMoney();
     persist();
-    const tipText = tip ? ` · ทิป ${tip}${lime ? ` (มะนาวสด ${lime})` : ''}` : '';
-    if (owned.has('qr') && pay) ding(pay + tip);
-    const words = said.length ? `\n${c.order.who}: "${said.join(' ')}"` : '';
-    showResult(r.verdict, `${c.order.who} · ${pay ? `+${pay} บาท${tipText}` : 'ไม่ได้เงิน'}${words}`, r.rows);
-    customerDone(slot);
+  }
+
+  /** Customers waiting to show their slip or coins, one at a time. */
+  const payQueue: (() => void)[] = [];
+  function nextPayment(): void {
+    if (payDesk.busy) return;
+    const next = payQueue.shift();
+    if (next) next();
+    else if (closing) {
+      closing = false;
+      endDay();
+    }
+  }
+
+  /** The seller looks at the slip or counts the coins and says whether it is all there. */
+  function collect(o: Order, kind: PayKind, fake: Fake | null, pay: number, tip: number): void {
+    const amount = pay + tip;
+    payQueue.push(() =>
+      payDesk.show({ who: o.who, face: avatarSvg(o), amount, kind, fake, quick: day >= 4 }, (v) => {
+        if (v === 'ok' && !fake) {
+          receive(pay, tip);
+          toast(`ได้รับเงิน ${amount} บาท`);
+        } else if (v === 'ok') {
+          // Taken in by a fake: the drink is gone and the money never comes.
+          today.fakeLost += amount;
+          today.fakeCount++;
+          stats.fakeMissed++;
+          stats.fakeLost += amount;
+          toast(`${o.who} รับน้ำแล้วเดินไป`);
+        } else if (fake) {
+          stats.fakeCaught++;
+          receive(pay, tip);
+          toast(`${o.who}: "${CAUGHT[fake]}"`);
+        } else {
+          stats.wrongAccuse++;
+          receive(pay, tip);
+          toast(`${o.who}: "${kind === 'slip' ? 'โอนแล้วจริงๆ ดูดีๆ สิ!' : 'นับดีๆ สิ ครบแล้วนะ!'}"`);
+        }
+        persist();
+        nextPayment();
+      }),
+    );
+    nextPayment();
+  }
+
+  /** Spoken orders float across the top when nobody is writing them down. */
+  const lane = el('div', { id: 'speech' });
+  lane.setAttribute('aria-live', 'polite');
+  stageEl.append(lane);
+  let speechFree = 0;
+  function speak(c: Customer, text: string): void {
+    const now = performance.now();
+    const wait = Math.max(0, speechFree - now);
+    speechFree = now + wait + SPEECH_GAP * 1000;
+    window.setTimeout(() => {
+      const b = el('div', { className: 'bubble' });
+      const face = el('span', { className: 'face' });
+      face.innerHTML = avatarSvg(c.shown);
+      b.append(face, el('span', { text: `${c.shown.who}: ${text}` }));
+      b.addEventListener('animationend', () => b.remove());
+      lane.append(b);
+    }, wait);
+  }
+  function announce(c: Customer | null): void {
+    if (c && !kidHere() && !c.browse) speak(c, c.quote);
+  }
+  /** Asking again works, but the customer is less patient for it. */
+  function repeat(slot: number): void {
+    const c = waiting[slot];
+    if (!c) return;
+    c.patience -= c.total * REPEAT_COST;
+    stats.asked++;
+    speak(c, `${ANNOYED[Math.floor(Math.random() * ANNOYED.length)]}${c.quote}`);
+    updatePatienceBars();
+  }
+
+  /** On the last day the city officers sweep the street once; the cart has seconds to move. */
+  function raid(): void {
+    const box = el('section', { className: 'raid' });
+    const go = el('button', { className: 'pill', text: 'เข็นรถหลบ!' });
+    go.type = 'button';
+    const bar = el('div', { className: 'raid-bar' });
+    box.append(el('b', { text: 'เทศกิจมาแล้ว!' }), el('span', { text: 'เข็นรถหลบเร็ว ไม่งั้นโดนปรับ' }), go, bar);
+    bar.style.animationDuration = `${RAID_SECONDS}s`;
+    stageEl.append(box);
+    const timer = window.setTimeout(() => {
+      box.remove();
+      money -= RAID_FINE;
+      stats.fined += RAID_FINE;
+      showMoney();
+      persist();
+      toast(`โดนเทศกิจปรับ ${RAID_FINE} บาท`);
+    }, RAID_SECONDS * 1000);
+    go.addEventListener('click', () => {
+      clearTimeout(timer);
+      box.remove();
+      // Hiding the cart costs the waiting customers some time.
+      waiting.forEach((c) => c && (c.patience -= RAID_WAIT));
+      toast('หลบทัน! ลูกค้ารอนานขึ้นนิดหน่อย');
+    });
+    go.focus();
   }
 
   function walkOut(slot: number): void {
     const c = waiting[slot];
     if (!c) return;
+    if (c.browse) {
+      showResult('แค่ถามราคา', `${c.shown.who}: "ไม่เป็นไรจ้ะ แค่ถามดู"`, []);
+      customerDone(slot);
+      return;
+    }
     today.walked++;
+    stats.walked++;
     showResult('รอนานเกินไป', `${c.order.who} เดินออกไปแล้ว`, []);
     customerDone(slot);
   }
@@ -710,11 +928,18 @@ export function startGame(stage: DrinkStage): void {
     waiting.length = 0;
     paradoxAt.clear();
     paradoxUsed.clear();
+    today.fakeLost = today.fakeCount = 0;
+    dayClock = 0;
+    raidAt = day === LAST_DAY ? 50 + Math.random() * 60 : -1;
+    auntAt = day === LAST_DAY ? 3 + Math.floor(Math.random() * (DAY_CUSTOMERS - 3)) : -1;
+    lane.textContent = '';
+    speechFree = 0;
     // Contradictory orders come at random points of the day, never first.
     if (day >= 2) while (paradoxAt.size < PARADOXES_PER_DAY) paradoxAt.add(2 + Math.floor(Math.random() * (DAY_CUSTOMERS - 1)));
     // Day one always opens with the Thai iced tea, which the hints walk through.
     waiting.push(arrive(day === 1 ? ORDERS[0] : undefined));
     while (waiting.length < WAITING) waiting.push(arrive());
+    waiting.forEach(announce);
     tray.forEach((entry, i) => {
       if (entry) table.removeItem(entry.item);
       tray[i] = null;
@@ -728,32 +953,104 @@ export function startGame(stage: DrinkStage): void {
   }
 
   function endDay(): void {
+    // Anyone still holding up a slip is dealt with first.
+    if (payDesk.busy || payQueue.length) {
+      closing = true;
+      return;
+    }
     dayOpen = false;
+    lane.textContent = '';
     resultCard.hidden = true;
     table.setCooler(false);
     day++;
     persist();
-    renderDayCard(day - 1);
+    if (day > LAST_DAY) renderFinal();
+    else renderDayCard(day - 1);
   }
 
   /** Tells the story of the day about to open and what will happen in it. */
   function showIntro(): void {
     dayOpen = false;
+    hired = false;
     const intro = dayIntro(day);
     $('#day').textContent = String(day);
     dayCard.textContent = '';
     dayCard.classList.add('intro');
     dayCard.append(el('div', { className: 'kicker', text: `วันที่ ${day}` }), el('h2', { text: intro.title }), el('p', { className: 'story', text: intro.story }));
-    const list = el('ul', { className: 'points' });
-    intro.points.forEach((t) => list.append(el('li', { text: t })));
     const go = el('button', { className: 'pill', text: 'เริ่มขาย' });
     go.type = 'button';
     go.addEventListener('click', startDay);
     const row = el('div', { className: 'row end' });
+    if (owned.has('call') && day > 2) {
+      const call = el('button', { className: 'ghost', text: money >= KID_WAGE ? `โทรหา${KID} (ค่าขนม ${KID_WAGE} บาท)` : `เงินไม่พอจ้าง${KID}` });
+      call.type = 'button';
+      call.disabled = money < KID_WAGE;
+      call.addEventListener('click', () => {
+        if (hired || money < KID_WAGE) return;
+        hired = true;
+        money -= KID_WAGE;
+        showMoney();
+        persist();
+        call.replaceWith(el('p', { className: 'kid-says', text: `${KID}: "ได้ค่ะแม่ เดี๋ยวไปช่วยจด แต่ขอชานมไข่มุกแก้วนึงนะ"` }));
+      });
+      row.append(call);
+    }
     row.append(go);
-    dayCard.append(list, row);
+    dayCard.append(row);
     dayCard.hidden = false;
     go.focus();
+  }
+
+  /** Throws away the whole run and starts again from day one. */
+  function resetRun(): void {
+    phone.close();
+    const s = clearSave();
+    day = s.day;
+    money = s.money;
+    stats = noStats();
+    regulars.length = 0;
+    owned.clear();
+    table.applyUpgrades(owned);
+    showMoney();
+    showIntro();
+  }
+
+  /** After the last day: the rank, the numbers behind it, and a line to share. */
+  function renderFinal(): void {
+    dayOpen = false;
+    const r = rankOf(stats);
+    dayCard.textContent = '';
+    dayCard.classList.add('intro');
+    dayCard.append(el('div', { className: 'kicker', text: `ผลทดสอบแม่ค้า ${LAST_DAY} วัน` }), el('h2', { text: r.title }), el('div', { className: 'score', text: `${r.score}/100` }), el('p', { className: 'story', text: r.line }));
+    const grid = el('div', { className: 'stats' });
+    ([
+      ['เสิร์ฟ', stats.served],
+      ['ชงเป๊ะ', stats.perfect],
+      ['เดินหนี', stats.walked],
+      ['รายได้รวม', stats.earned],
+      ['จับสลิปปลอม', stats.fakeCaught],
+      ['โดนสลิปปลอม', stats.fakeMissed],
+      ['คุยกับลูกค้า', `${stats.explained}/${stats.paradoxes}`],
+      ['ถามซ้ำ', stats.asked],
+    ] as const).forEach(([label, value]) => {
+      const box = el('div');
+      box.append(el('b', { text: String(value) }), el('span', { text: label }));
+      grid.append(box);
+    });
+    const share = el('button', { className: 'ghost', text: 'คัดลอกผลไปอวด' });
+    share.type = 'button';
+    share.addEventListener('click', () => {
+      const text = `ฉันได้ฉายา "${r.title}" ${r.score}/100 จากการขายน้ำชงหน้าโรงเรียน ${LAST_DAY} วัน ในเกมชงหวานหวาน`;
+      navigator.clipboard?.writeText(text).then(() => (share.textContent = 'คัดลอกแล้ว'), () => (share.textContent = text));
+    });
+    const again = el('button', { className: 'pill', text: 'ทดสอบใหม่' });
+    again.type = 'button';
+    again.addEventListener('click', resetRun);
+    const row = el('div', { className: 'row end' });
+    row.append(share, again);
+    dayCard.append(grid, row);
+    dayCard.hidden = false;
+    again.focus();
   }
 
   /** Summary of the day just closed, and the shop. */
@@ -767,9 +1064,13 @@ export function startGame(stage: DrinkStage): void {
       box.append(el('b', { text: value }), el('span', { text: label }));
       stats.append(box);
     });
+    if (today.fakeLost) {
+      dayCard.append(el('p', { className: 'reveal', text: `ปิดร้านแล้วเปิดแอปธนาคารเช็กยอด เงินไม่เข้า ${today.fakeLost} บาท จากสลิป ${today.fakeCount} ใบ...` }));
+    }
     const heading = el('h3', { text: 'อัปเกรดร้าน' });
     heading.append(el('span', { className: 'wallet', text: `เงินในร้าน ${money} บาท` }));
-    const left = UPGRADES.filter((u) => !owned.has(u.id));
+    const left = UPGRADES.filter((u) => !owned.has(u.id) && (u.from ?? 1) <= day);
+    const fresh = UPGRADES.filter((u) => u.from === day).length;
     const affordable = left.filter((u) => u.price <= money).length;
     const shop = el('button', { className: 'phone-cta' });
     shop.type = 'button';
@@ -777,7 +1078,7 @@ export function startGame(stage: DrinkStage): void {
     const words = el('span');
     words.append(
       el('b', { text: 'เปิดแอปช้อปเหมียว' }),
-      el('small', { text: left.length ? `ซื้อของเข้าร้าน · มีของที่เงินพอซื้อ ${affordable} ชิ้น` : 'ซื้ออัปเกรดที่มีขายครบแล้ว รอของใหม่เข้า' }),
+      el('small', { text: `${fresh ? `มีของใหม่เข้า ${fresh} ชิ้น · ` : ''}${left.length ? `ซื้อของเข้าร้าน · มีของที่เงินพอซื้อ ${affordable} ชิ้น` : 'ซื้ออัปเกรดที่มีขายครบแล้ว รอของใหม่เข้า'}` }),
     );
     shop.append(words);
     shop.addEventListener('click', () => phone.open(() => renderDayCard(closed)));
@@ -792,13 +1093,7 @@ export function startGame(stage: DrinkStage): void {
         restart.textContent = 'กดอีกครั้งเพื่อล้างเงินและอัปเกรด';
         return;
       }
-      const s = clearSave();
-      day = s.day;
-      money = s.money;
-      owned.clear();
-      table.applyUpgrades(owned);
-      showMoney();
-      showIntro();
+      resetRun();
     });
     const open = el('button', { className: 'pill', text: `เปิดร้าน วันที่ ${day}` });
     open.type = 'button';
@@ -850,6 +1145,11 @@ export function startGame(stage: DrinkStage): void {
 
   function patienceFrame(dt: number): void {
     if (!dayOpen) return;
+    dayClock += dt;
+    if (raidAt >= 0 && dayClock >= raidAt) {
+      raidAt = -1;
+      raid();
+    }
     waiting.forEach((c, i) => {
       if (!c) return;
       c.patience -= dt;
@@ -918,7 +1218,8 @@ export function startGame(stage: DrinkStage): void {
   drawGarland(garland);
   showMoney();
   stage.layout();
-  showIntro();
+  if (day > LAST_DAY) renderFinal();
+  else showIntro();
 
   // Dev mode: shortcuts for checking the summary, the shop and walk-outs without playing a whole day.
   // It shows on the dev server, or on the live site when the address ends in ?dev.
@@ -985,15 +1286,20 @@ export function startGame(stage: DrinkStage): void {
       'dev-rush': () => {
         waiting.forEach((c) => c && (c.patience = Math.min(c.patience, 5)));
       },
-      'dev-reset': () => {
-        phone.close();
-        const s = clearSave();
-        day = s.day;
-        money = s.money;
-        owned.clear();
-        table.applyUpgrades(owned);
-        showMoney();
-        showIntro();
+      'dev-reset': resetRun,
+      'dev-slip': () => {
+        const c = waiting.find(Boolean);
+        if (c) collect(c.shown, 'slip', (['amount', 'name', 'date'] as const)[Math.floor(Math.random() * 3)], 45, 0);
+      },
+      'dev-coins': () => {
+        const c = waiting.find(Boolean);
+        if (c) collect(c.shown, 'coins', Math.random() < 0.5 ? 'short' : null, 45, 0);
+      },
+      'dev-raid': raid,
+      'dev-final': () => {
+        day = LAST_DAY + 1;
+        persist();
+        renderFinal();
       },
     };
     Object.entries(actions).forEach(([id, run]) => $(`#${id}`).addEventListener('click', run));
