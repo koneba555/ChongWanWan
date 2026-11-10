@@ -838,15 +838,13 @@ export function startGame(stage: DrinkStage): void {
     updatePatienceBars();
   }
 
-  /** The recipe as steps to tick off, in the order they're done. */
+  /** What goes into the drink, to tick off as it is added. */
   function stepsOf(o: Order): { k: string; label: string }[] {
     const out = [{ k: 'base', label: BASE[o.base].n }];
     ADD_IDS.forEach((k) => {
       if (o.milk[k]) out.push({ k, label: ADD[k] + (o.milk[k] > 1 ? ` ×${o.milk[k]}` : '') });
     });
-    out.push({ k: 'mix', label: 'คนให้เข้ากัน' }, { k: 'vessel', label: VESSEL_ASK[o.vessel] });
     if (o.pearls) out.push({ k: 'pearls', label: 'ไข่มุก' });
-    out.push({ k: 'pour', label: 'เทลงภาชนะ' });
     if (o.whip) out.push({ k: 'whip', label: 'วิปครีม' });
     if (o.sealed) out.push({ k: 'sealed', label: 'ซีลฝา' });
     return out;
@@ -862,10 +860,7 @@ export function startGame(stage: DrinkStage): void {
         const k = li.dataset.k ?? '';
         const done =
           k === 'base' ? drink.base === o.base
-          : k === 'mix' ? drink.mix >= 0.99 && drink.base !== null
-          : k === 'vessel' ? drink.vessel === o.vessel
           : k === 'pearls' ? drink.pearls
-          : k === 'pour' ? drink.poured
           : k === 'whip' ? drink.whip
           : k === 'sealed' ? drink.sealed
           : drink.milk[k as AddId] === o.milk[k as AddId];
