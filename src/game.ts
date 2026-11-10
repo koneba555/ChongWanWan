@@ -84,6 +84,23 @@ const PARADOXES_PER_DAY = 2;
 const HALF_CUP_GRIPE = 0.6;
 /** Tip from a no-ice customer whose cup was topped up to the brim. */
 const FULL_CUP_TIP = 5;
+/** Days in the middle of the week when customers ask for menus the cart can't make yet, and how many a day. */
+const WISH_FROM = 3;
+const WISH_TO = 6;
+const WISHES_PER_DAY = 2;
+const NO_STOCK_LINES = ['ไม่มีเหรอ งั้นไปร้านอื่นนะ', 'อ้าว ร้านข้างๆ เขามีนะ', 'เสียดายจัง ไว้มีแล้วบอกนะ', 'ไม่มีอีกแล้วเหรอ...'];
+
+/** The first-day walkthrough: what to look at, and what to do, one step at a time. */
+const COACH: { spot: string | null; text: string }[] = [
+  { spot: '#orders', text: 'ลูกค้าสั่งอะไร ดูที่การ์ดทางซ้าย มีรูปแก้ว ชื่อเมนู ใส่แก้วหรือถุง และราคา' },
+  { spot: '#orders .steps', text: 'สูตรอยู่ตรงนี้ ทำตามจากซ้ายไปขวา ทำขั้นไหนถูกแล้วจะขึ้นเครื่องหมายถูกให้' },
+  { spot: null, text: 'ชงในแก้วตวงกลางเคาน์เตอร์: ลากกระป๋องผงชาบนชั้นมาใส่ กดกระติกน้ำร้อน แล้วลากนมหรือน้ำเชื่อมมาเติมตามจำนวนในสูตร' },
+  { spot: null, text: 'ลากช้อนมาคนจนครบ 100% แล้วกดถังแช่สีแดง ลากแก้วหรือถุงใส่น้ำแข็งมาวาง จากนั้นลากแก้วตวงไปเท' },
+  { spot: null, text: 'กด "ปิดฝา แขวนรอส่ง" น้ำจะไปแขวนบนตะขอ แล้วลากถุงจากตะขอไปวางที่การ์ดลูกค้า' },
+  { spot: '#hud', text: 'ติดตรงไหน ดูคำแนะนำตรงนี้ จะบอกทีละขั้นว่าต้องทำอะไรต่อ' },
+  { spot: '#top-right', text: 'ลูกค้าจ่ายเต็มราคาเสมอ แต่ชงไม่ตรงจะได้ดาวน้อย คะแนนร้านกับเงินดูตรงนี้' },
+];
+
 /** Share of customers who walk off and then post a one-star review. */
 const WALKOUT_REVIEW_SHARE = 0.5;
 /** Asking a customer to say their order again costs this share of their patience. */
@@ -127,6 +144,8 @@ interface Customer {
   gripe?: { drop: number; line: string };
   /** Only asks prices and leaves; nothing to make. */
   browse?: boolean;
+  /** Asks for a menu the cart can't make yet; what the cart would need to buy. */
+  want?: UpgradeId;
   patience: number;
   total: number;
 }
@@ -186,7 +205,11 @@ export function startGame(stage: DrinkStage): void {
   /** Which arrivals of the day bring a contradictory order, and which have come already. */
   const paradoxAt = new Set<number>();
   const paradoxUsed = new Set<Paradox>();
-  const today = { done: 0, served: 0, walked: 0, earned: 0, tips: 0, fakeLost: 0, fakeCount: 0 };
+  const today = { done: 0, served: 0, walked: 0, earned: 0, tips: 0, fakeLost: 0, fakeCount: 0, wants: [] as UpgradeId[] };
+  /** Which arrivals of the day ask for a menu the cart doesn't sell. */
+  const wishAt = new Set<number>();
+  /** The day pauses while the first-day walkthrough is open. */
+  let paused = false;
   /** Seconds the cart has been open today, and when the officers come on the last day. */
   let dayClock = 0;
   let raidAt = -1;
@@ -224,6 +247,63 @@ export function startGame(stage: DrinkStage): void {
     persist();
   };
   const pick = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
+
+  /** Walks the seller through the first drink; the day waits until it's closed. */
+  const coachEl = $('#coach');
+  function coach(): void {
+    let step = 0;
+    paused = true;
+    const clearSpot = () => document.querySelectorAll('.spot, .lift').forEach((e) => e.classList.remove('spot', 'lift'));
+    const done = () => {
+      clearSpot();
+      coachEl.hidden = true;
+      paused = false;
+    };
+    const show = () => {
+      clearSpot();
+      const s = COACH[step];
+      const target = s.spot ? document.querySelector<HTMLElement>(s.spot) : null;
+      target?.classList.add('spot');
+      // A nested target only shows above the dimming if its panel is lifted too.
+      target?.parentElement?.closest('#orders, #top')?.classList.add('lift');
+      coachEl.classList.toggle('dim', !target);
+      coachEl.querySelector('.coach-n')!.textContent = `วิธีชง ${step + 1}/${COACH.length}`;
+      coachEl.querySelector('.coach-text')!.textContent = s.text;
+      coachEl.querySelector('.coach-next')!.textContent = step === COACH.length - 1 ? 'เริ่มชงเลย' : 'ถัดไป';
+      coachEl.hidden = false;
+    };
+    coachEl.querySelector<HTMLButtonElement>('.coach-next')!.onclick = () => (++step < COACH.length ? show() : done());
+    coachEl.querySelector<HTMLButtonElement>('.coach-skip')!.onclick = done;
+    show();
+  }
+
+  /** The recipe book: every menu the cart can make, and what the rest would need. */
+  const bookBtn = $<HTMLButtonElement>('#book-btn');
+  const book = $('#book');
+  function openBook(): void {
+    book.textContent = '';
+    const head = el('div', { className: 'book-head' });
+    const close = el('button', { className: 'close', text: '×' });
+    close.type = 'button';
+    close.setAttribute('aria-label', 'ปิดตำรา');
+    close.addEventListener('click', () => (book.hidden = true));
+    head.append(el('h2', { text: 'ตำราชง' }), close);
+    const list = el('ul', { className: 'book-list' });
+    const seen = new Set<string>();
+    [...ORDERS].sort((a, b) => Number(!!missingFor(a)) - Number(!!missingFor(b))).forEach((o) => {
+      const name = plainName(o);
+      const key = name + recipeOf(o);
+      if (seen.has(key)) return;
+      seen.add(key);
+      const need = missingFor(o);
+      const li = el('li', { className: need ? 'locked' : '' });
+      li.append(el('b', { text: name }), el('span', { text: need ? `ต้องมี ${UPGRADES.find((u) => u.id === need)?.name ?? need}` : recipeOf(o) }));
+      list.append(li);
+    });
+    book.append(head, list);
+    book.hidden = false;
+  }
+  bookBtn.addEventListener('click', () => (book.hidden ? openBook() : (book.hidden = true)));
   let dingTimer = 0;
   /** A short note that pops up by the money: the sound box reading out a payment, or what a customer says. */
   const toast = (text: string) => {
@@ -334,6 +414,7 @@ export function startGame(stage: DrinkStage): void {
     iceBtn.hidden = day < 2 || !drink.vessel || drink.poured || drink.ice === 'none';
     topBtn.hidden = !drink.poured || stage.pouring || drink.ice !== 'none' || drink.topped;
     stirBox.hidden = !stirring;
+    updateSteps();
     $('#day').textContent = String(day);
     $('#order-no').textContent = String(today.done);
     $('#day-total').textContent = String(DAY_CUSTOMERS);
@@ -526,6 +607,10 @@ export function startGame(stage: DrinkStage): void {
         say('ตอบลูกค้าที่ตั๋วก่อนว่าจะทำยังไง');
         return false;
       }
+      if (c?.want) {
+        say(`${c.shown.who}ถามหา${plainName(c.shown)} ร้านเรายังไม่มี`);
+        return false;
+      }
       if (c?.browse) {
         say(`${c.shown.who}แค่ถามราคา ไม่ได้สั่งอะไร`);
         return false;
@@ -545,6 +630,35 @@ export function startGame(stage: DrinkStage): void {
   /** Menus that need a bought powder or topping only come up once the cart has it. */
   const canMake = (o: Order) =>
     (o.base !== 'cocoa' || owned.has('cocoa')) && (o.base !== 'matcha' || owned.has('matcha')) && (o.base !== 'espresso' || owned.has('espresso')) && (!o.pearls || owned.has('pearl')) && (!o.whip || owned.has('whip')) && (!o.sealed || owned.has('sealer'));
+
+  /** The first thing the cart would have to buy to make this menu, or null if it can already. */
+  const missingFor = (o: Order): UpgradeId | null =>
+    o.base === 'cocoa' && !owned.has('cocoa') ? 'cocoa'
+    : o.base === 'matcha' && !owned.has('matcha') ? 'matcha'
+    : o.base === 'espresso' && !owned.has('espresso') ? 'espresso'
+    : o.pearls && !owned.has('pearl') ? 'pearl'
+    : o.whip && !owned.has('whip') ? 'whip'
+    : o.sealed && !owned.has('sealer') ? 'sealer'
+    : null;
+
+  /** A customer asking for a menu the cart can't make yet. */
+  function wishCustomer(total: number): Customer | null {
+    const locked = ORDERS.filter((o) => missingFor(o) && !waiting.some((w) => w?.shown === o));
+    const o = pick(locked);
+    if (!o) return null;
+    const name = plainName(o);
+    const quote = pick([`มี${name}ไหม`, `ร้านนี้มี${name}หรือเปล่า`, `ขอ${name}แก้วนึงได้ไหม`]);
+    return { order: o, shown: o, quote, tags: [], browse: true, want: missingFor(o) ?? undefined, patience: total, total };
+  }
+
+  /** The seller owns up to not selling it; the customer goes elsewhere, and the cart remembers what was asked for. */
+  function sorry(slot: number): void {
+    const c = waiting[slot];
+    if (!c?.want) return;
+    today.wants.push(c.want);
+    showResult('ไม่มีขาย', `${c.shown.who}: "${pick(NO_STOCK_LINES)}"`, []);
+    customerDone(slot);
+  }
 
   function newOrder(): Order {
     const here = waiting.filter((c): c is Customer => c !== null).map((c) => c.shown);
@@ -574,6 +688,10 @@ export function startGame(stage: DrinkStage): void {
         thumbFor(o);
         return { order: o, shown: o, quote: 'เอาเหมือนเดิมนะ', tags: [], patience: total, total };
       }
+    }
+    if (wishAt.has(arrived)) {
+      const w = wishCustomer(total);
+      if (w) return w;
     }
     const p = paradoxAt.has(arrived) ? pickParadox() : null;
     if (p) {
@@ -662,7 +780,13 @@ export function startGame(stage: DrinkStage): void {
       const face = el('span', { className: 'face' });
       face.innerHTML = avatarSvg(o);
       who.append(face, el('span', { text: `${o.who}: ${c.quote}` }));
-      if (c.browse) {
+      if (c.want) {
+        text.append(el('div', { className: 'name', text: `ถามหา ${plainName(o)}` }), who, el('div', { className: 'reply', text: 'ร้านเรายังไม่มีเมนูนี้' }));
+        const no = el('button', { className: 'again', text: 'ขอโทษนะ ยังไม่มีขาย' });
+        no.type = 'button';
+        no.addEventListener('click', () => sorry(i));
+        text.append(no);
+      } else if (c.browse) {
         text.append(el('div', { className: 'name', text: 'แค่ถามราคา' }), who);
       } else if (blind) {
         // Nobody wrote it down: the seller has to remember what was said, or ask again.
@@ -690,7 +814,17 @@ export function startGame(stage: DrinkStage): void {
         if (c.reply) text.append(el('div', { className: 'reply', text: c.reply }));
       }
       if (!c.browse && !blind && !(c.paradox && !c.answer)) {
-        const recipe = el('div', { className: 'recipe', text: `สูตร${c.tags.length ? 'ปกติ' : ''}: ${recipeOf(o)} · ${orderPrice(o)} บาท` });
+        const recipe = el('div', { className: 'recipe' });
+        recipe.append(el('div', { className: 'recipe-head', text: `สูตร${c.tags.length ? 'ปกติ' : ''} · ${orderPrice(o)} บาท` }));
+        const steps = el('ul', { className: 'steps' });
+        // Ticks only make sense when the drink to make is the recipe as written.
+        if (c.order === o) steps.classList.add('live');
+        stepsOf(o).forEach((s) => {
+          const li = el('li', { text: s.label });
+          li.dataset.k = s.k;
+          steps.append(li);
+        });
+        recipe.append(steps);
         if (c.tags.length) recipe.append(...c.tags.map((t) => el('span', { className: 'tag', text: t })));
         text.append(recipe);
       }
@@ -702,6 +836,43 @@ export function startGame(stage: DrinkStage): void {
       ordersEl.append(card);
     });
     updatePatienceBars();
+  }
+
+  /** The recipe as steps to tick off, in the order they're done. */
+  function stepsOf(o: Order): { k: string; label: string }[] {
+    const out = [{ k: 'base', label: BASE[o.base].n }];
+    ADD_IDS.forEach((k) => {
+      if (o.milk[k]) out.push({ k, label: ADD[k] + (o.milk[k] > 1 ? ` ×${o.milk[k]}` : '') });
+    });
+    out.push({ k: 'mix', label: 'คนให้เข้ากัน' }, { k: 'vessel', label: VESSEL_ASK[o.vessel] });
+    if (o.pearls) out.push({ k: 'pearls', label: 'ไข่มุก' });
+    out.push({ k: 'pour', label: 'เทลงภาชนะ' });
+    if (o.whip) out.push({ k: 'whip', label: 'วิปครีม' });
+    if (o.sealed) out.push({ k: 'sealed', label: 'ซีลฝา' });
+    return out;
+  }
+
+  /** Ticks each recipe step the drink in hand already matches. */
+  function updateSteps(): void {
+    ordersEl.querySelectorAll<HTMLElement>('.order[data-slot]').forEach((card) => {
+      const c = waiting[Number(card.dataset.slot)];
+      if (!c) return;
+      const o = c.order;
+      card.querySelectorAll<HTMLElement>('.steps.live li').forEach((li) => {
+        const k = li.dataset.k ?? '';
+        const done =
+          k === 'base' ? drink.base === o.base
+          : k === 'mix' ? drink.mix >= 0.99 && drink.base !== null
+          : k === 'vessel' ? drink.vessel === o.vessel
+          : k === 'pearls' ? drink.pearls
+          : k === 'pour' ? drink.poured
+          : k === 'whip' ? drink.whip
+          : k === 'sealed' ? drink.sealed
+          : drink.milk[k as AddId] === o.milk[k as AddId];
+        li.classList.toggle('done', done);
+        li.classList.toggle('over', !done && (ADD_IDS as string[]).includes(k) && drink.milk[k as AddId] > o.milk[k as AddId]);
+      });
+    });
   }
 
   function updatePatienceBars(): void {
@@ -916,6 +1087,16 @@ export function startGame(stage: DrinkStage): void {
   function walkOut(slot: number): void {
     const c = waiting[slot];
     if (!c) return;
+    if (c.want) {
+      // Left standing without an answer: still a sale the cart could have had, and maybe a sour review.
+      today.wants.push(c.want);
+      if (Math.random() < WALKOUT_REVIEW_SHARE) {
+        postReview(1);
+        showResult(starText(1), `${c.shown.who} เดินออกไปแล้ว\n"ถามว่ามี${plainName(c.shown)}ไหม ไม่มีใครตอบเลย"`, []);
+      } else showResult('ไม่มีขาย', `${c.shown.who} เดินไปร้านอื่นแล้ว`, []);
+      customerDone(slot);
+      return;
+    }
     if (c.browse) {
       showResult('แค่ถามราคา', `${c.shown.who}: "ไม่เป็นไรจ้ะ แค่ถามดู"`, []);
       customerDone(slot);
@@ -965,6 +1146,8 @@ export function startGame(stage: DrinkStage): void {
     paradoxAt.clear();
     paradoxUsed.clear();
     today.fakeLost = today.fakeCount = 0;
+    today.wants = [];
+    wishAt.clear();
     dayClock = 0;
     raidAt = day === LAST_DAY ? 50 + Math.random() * 60 : -1;
     auntAt = day === LAST_DAY ? 3 + Math.floor(Math.random() * (DAY_CUSTOMERS - 3)) : -1;
@@ -972,6 +1155,12 @@ export function startGame(stage: DrinkStage): void {
     speechFree = 0;
     // Contradictory orders come at random points of the day, never first.
     if (day >= 2) while (paradoxAt.size < PARADOXES_PER_DAY) paradoxAt.add(2 + Math.floor(Math.random() * (DAY_CUSTOMERS - 1)));
+    // In the middle of the week some customers ask for menus the cart doesn't sell yet.
+    if (day >= WISH_FROM && day <= WISH_TO && ORDERS.some((o) => missingFor(o)))
+      while (wishAt.size < WISHES_PER_DAY) {
+        const n = 2 + Math.floor(Math.random() * (DAY_CUSTOMERS - 1));
+        if (!paradoxAt.has(n)) wishAt.add(n);
+      }
     // Day one always opens with the Thai iced tea, which the hints walk through.
     waiting.push(arrive(day === 1 ? ORDERS[0] : undefined));
     while (waiting.length < WAITING) waiting.push(null);
@@ -985,8 +1174,10 @@ export function startGame(stage: DrinkStage): void {
     dayOpen = true;
     dayCard.hidden = true;
     dayCard.classList.remove('intro');
+    bookBtn.hidden = day < 2;
     renderOrders();
     updateHud();
+    if (day === 1) coach();
   }
 
   function endDay(): void {
@@ -1103,6 +1294,12 @@ export function startGame(stage: DrinkStage): void {
       box.append(el('b', { text: value }), el('span', { text: label }));
       stats.append(box);
     });
+    if (today.wants.length) {
+      const asked = new Map<UpgradeId, number>();
+      today.wants.forEach((w) => asked.set(w, (asked.get(w) ?? 0) + 1));
+      const list = [...asked].map(([id, n]) => `${UPGRADES.find((u) => u.id === id)?.name ?? id}${n > 1 ? ` ×${n}` : ''}`).join(' · ');
+      dayCard.append(el('p', { className: 'reveal wants', text: `วันนี้ลูกค้าถามหาของที่ร้านไม่มี: ${list}` }));
+    }
     if (today.fakeLost) {
       dayCard.append(el('p', { className: 'reveal', text: `ปิดร้านแล้วเปิดแอปธนาคารเช็กยอด เงินไม่เข้า ${today.fakeLost} บาท จากสลิป ${today.fakeCount} ใบ...` }));
     }
@@ -1202,7 +1399,7 @@ export function startGame(stage: DrinkStage): void {
   }
 
   function patienceFrame(dt: number): void {
-    if (!dayOpen) return;
+    if (!dayOpen || paused) return;
     dayClock += dt;
     if (raidAt >= 0 && dayClock >= raidAt) {
       raidAt = -1;
@@ -1323,6 +1520,13 @@ export function startGame(stage: DrinkStage): void {
       'dev-pearl': () => devOrder((o) => o.pearls),
       'dev-whip': () => devOrder((o) => o.whip),
       'dev-sealed': () => devOrder((o) => o.sealed),
+      'dev-wish': () => {
+        const slot = waiting.findIndex(Boolean);
+        const c = slot < 0 ? null : wishCustomer(waiting[slot]!.total);
+        if (!c) return;
+        waiting[slot] = c;
+        renderOrders(slot);
+      },
       'dev-espresso': () => devOrder((o) => o.base === 'espresso'),
       'dev-paradox': () => {
         const slot = waiting.findIndex(Boolean);

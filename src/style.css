@@ -31,7 +31,7 @@ img { max-width: 100%; }
 
 
 /* Waiting customers: one card each, a finished drink is dropped onto the card it was made for. */
-#orders { position: absolute; z-index: 3; left: max(24px, env(safe-area-inset-left, 0px)); top: 84px; width: clamp(250px, 19vw, 300px); display: flex; flex-direction: column; gap: 10px; }
+#orders { position: absolute; z-index: 3; left: max(24px, env(safe-area-inset-left, 0px)); top: 84px; width: clamp(270px, 22vw, 340px); display: flex; flex-direction: column; gap: 10px; }
 .order { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; background: var(--ticket); border-radius: 6px; padding: 8px; box-shadow: 0 8px 18px #0007; transition: transform .15s, box-shadow .15s; }
 .order.aim { transform: translateX(8px); box-shadow: 0 0 0 3px var(--gold), 0 8px 18px #0007; }
 .order img { width: 70px; height: 70px; object-fit: contain; background: radial-gradient(circle at 50% 45%, #6a4a2c, #2c1b0d 78%); border: 3px solid #fbf3df; border-radius: 3px; box-sizing: border-box; }
@@ -292,3 +292,35 @@ img { max-width: 100%; }
 #verdict.stars { color: #e0a21b; letter-spacing: 2px; font-family: inherit; }
 @media (max-width: 760px) { #rating { font-size: 12px; padding: 4px 10px; } }
 #day-card:not(.intro) .stats { grid-template-columns: repeat(5, 1fr); }
+
+/* Recipe as a checklist */
+.order .recipe { font-size: 13px; }
+.order .recipe-head { font-size: 12px; opacity: .8; }
+.order .steps { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.order .steps li { font-size: 13.5px; line-height: 1.3; padding: 2px 8px; border-radius: 99px; background: #00000033; border: 1px solid #ffe3b855; color: #fff3dc; }
+.order .steps.live li.done { background: #9be36d; border-color: #9be36d; color: #1d3010; }
+.order .steps.live li.done::before { content: '✓ '; font-weight: 700; }
+.order .steps.live li.over { background: #e4573d; border-color: #e4573d; color: #fff; }
+/* First-day walkthrough */
+#coach { position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-end; justify-content: center; padding: 0 16px 120px; pointer-events: auto; background: transparent; }
+#coach.dim { background: #0007; }
+#coach[hidden] { display: none; }
+.coach-box { width: min(440px, 100%); background: #fbf3df; color: var(--ink); border-radius: 8px; padding: 14px 16px; box-shadow: 0 14px 34px #000a; }
+.coach-box .coach-n { font-size: 12px; color: #7a5a3a; }
+.coach-box .coach-text { margin: 4px 0 10px; font-size: 16px; line-height: 1.55; }
+.lift { z-index: 35 !important; }
+.spot { position: relative; z-index: 35 !important; box-shadow: 0 0 0 4px var(--gold), 0 0 0 9999px #0008 !important; border-radius: 8px; }
+#orders.spot, #hud.spot, #top-right.spot { position: absolute; }
+#top-right.spot { position: relative; }
+/* Recipe book */
+#book-btn { pointer-events: auto; font: inherit; font-size: 14px; font-weight: 500; color: var(--ink); background: var(--gold); border: 0; padding: 6px 14px; border-radius: 99px; cursor: pointer; }
+#top-right { pointer-events: auto; }
+#book { position: absolute; z-index: 12; right: max(24px, env(safe-area-inset-right, 0px)); top: 64px; width: min(360px, calc(100% - 32px)); max-height: calc(100% - 180px); overflow: auto; background: #fbf3df; color: var(--ink); border-radius: 6px; padding: 12px 16px; box-shadow: 0 14px 34px #0009; box-sizing: border-box; }
+#book .book-head { display: flex; justify-content: space-between; align-items: center; }
+#book h2 { margin: 0; font-family: var(--display); font-size: 28px; }
+#book .close { width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; font-size: 22px; cursor: pointer; color: var(--ink); }
+#book .book-list { list-style: none; margin: 6px 0 0; padding: 0; }
+#book .book-list li { display: flex; flex-direction: column; padding: 7px 2px; border-top: 1px dashed #2a160844; font-size: 13.5px; line-height: 1.45; }
+#book .book-list b { font-weight: 500; font-size: 15px; }
+#book .book-list li.locked { opacity: .55; }
+#day-card .wants { background: #fff1c9; }
